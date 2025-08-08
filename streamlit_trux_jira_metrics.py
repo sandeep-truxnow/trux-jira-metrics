@@ -259,8 +259,8 @@ if generate_summary_button:
         <h3>{header_title}</h3>
         <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
             <div><strong>Today:</strong> {date.today().strftime('%d-%b-%Y')}</div>
-            <div><strong>Start Date:</strong> {sprint_start_date.strftime('%d-%b-%Y')}</div>
-            <div><strong>End Date:</strong> {sprint_end_date.strftime('%d-%b-%Y')}</div>
+            <div><strong>Sprint Start Date:</strong> {sprint_start_date.strftime('%d-%b-%Y')}</div>
+            <div><strong>Sprint End Date:</strong> {sprint_end_date.strftime('%d-%b-%Y')}</div>
         </div>
         <hr>
         """
