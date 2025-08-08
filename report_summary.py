@@ -11,7 +11,7 @@ from common import seconds_to_hours, get_summary_issues_by_jql, prepare_summary_
 
 # === GENERATE HEADERS ===
 def generate_headers():
-    return ["Teams", "Issues", "Story Points", "Issues Complete", "% Complete", "Hours Worked", "All Time", "Bugs", "Failed QA Count", "Issues > 1 Sprint", "Points > 1 Sprint", "Sprint/Story"]
+    return ["Teams", "Issues", "Story Points", "Issues Complete", "% Complete", "Hours Worked", "All Time", "Bugs", "Failed QA Count", "Issues > 1 Sprint", "Points > 1 Sprint", "Avg Completion Days", "Avg Sprints/Story"]
 
 
 # --- Custom Field IDs ---
@@ -125,8 +125,14 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         total_spillover_issues = sum(issue['spillover_issues'] for issue in all_metrics)
         total_spillover_points = sum(issue['spillover_story_points'] for issue in all_metrics)
 
+        # Calculate average completion time for completed stories
+        completed_stories = [issue for issue in all_metrics if issue['issues_closed'] > 0 and issue['completion_time_days'] > 0]
+        avg_completion_days = sum(issue['completion_time_days'] for issue in completed_stories) / len(completed_stories) if completed_stories else 0
+        
+        # Calculate average number of sprints per story
+        avg_sprints_per_story = sum(issue['sprint_count'] for issue in all_metrics) / len(all_metrics) if all_metrics else 0
+        
         percent_work_complete = round((total_issues_closed / total_issues) * 100, 2) if total_issues else 0
-        # calculate avg_sprints_per_issue
 
 
         return team_id, {
@@ -140,6 +146,8 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             "Failed QA Count": total_failed_qa_count,
             "Spillover Issues": total_spillover_issues,
             "Spillover Story Points": total_spillover_points,
+            "Avg Completion Days": round(avg_completion_days, 1),
+            "Avg Sprints/Story": round(avg_sprints_per_story, 1),
         }
 
     # Run all teams in parallel
@@ -335,7 +343,8 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             metrics.get("Failed QA Count", 0),
             metrics.get("Spillover Issues", 0),
             metrics.get("Spillover Story Points", 0),
-            metrics.get("Sprints/Story Ratio", 0),
+            metrics.get("Avg Completion Days", 0.0),
+            metrics.get("Avg Sprints/Story", 0.0),
         ])
 
     df = pd.DataFrame(rows, columns=generate_headers())
@@ -368,7 +377,6 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_li
     story_points = 0
     issues_closed = 0
     bug_count = 0
-    sprint_counts = []
     spillover_issues = 0
     spillover_story_points = 0
 
@@ -386,15 +394,28 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_li
     if story_points is None or (isinstance(story_points, float) and np.isnan(story_points)):
         story_points = 0 # Display "N/A" for missing values
 
-    if isinstance(sprints, list) and len(sprints) > 1:
+    # Calculate sprint count for this issue
+    sprint_count = len(sprints) if isinstance(sprints, list) else 1
+    
+    if sprint_count > 1:
         spillover_issues += 1
         spillover_story_points += story_points or 0
-        sprint_counts.append(len(sprints))
-
-    # sprint_counts.append(len(sprints))
-        # if len(sprint_names) > 1:
-        #     issues_more_than_1_sprint += 1
-        #     story_points_more_than_1_sprint += story_points
+    
+    # Calculate completion time based on created date and resolution date
+    created_date = datetime.strptime(issue_data['fields']['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
+    completion_time_days = 0
+    
+    # Check if issue is completed based on current status
+    if status.lower() in ["done", "qa complete", "released", "closed"]:
+        # Find resolution date from changelog
+        for history in histories:
+            for item in history['items']:
+                if item['field'] == 'status' and item['toString'].lower() in ['done', 'qa complete', 'released', 'closed']:
+                    resolved_date = datetime.strptime(history['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
+                    completion_time_days = (resolved_date - created_date).days
+                    break
+            if completion_time_days > 0:
+                break
 
     # Count bugs
     if issue_type.lower() == "bug":
@@ -422,7 +443,8 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_li
         "all_time": total_all_time_logged_time_in_seconds,
         "bug_count": bug_count,
         "failed_qa_count": failed_qa_count,
-        "sprint_counts": sprint_counts,
+        "sprint_count": sprint_count,
+        "completion_time_days": completion_time_days,
         "spillover_issues": spillover_issues,
         "spillover_story_points": spillover_story_points,
     }

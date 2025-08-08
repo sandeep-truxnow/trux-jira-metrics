@@ -32,6 +32,16 @@ st.set_page_config(
     page_icon=":bar_chart:",
 )
 
+# Reduce top space
+st.markdown("""
+<style>
+.main .block-container {
+    padding-top: 1rem;
+    padding-bottom: 0rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📊 Jira Metrics")
 
 # --- Helper for capturing Streamlit messages ---
