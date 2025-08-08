@@ -638,7 +638,7 @@ def get_sprint_dates_from_name(sprint_name, base_sprint="2025.12", base_start_da
     return sprint_start_date, sprint_end_date
 
 
-def get_previous_n_sprints(base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14, count=3):
+def get_previous_n_sprints(count, base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
     base_year, base_sprint_num = map(int, base_sprint.split("."))
     base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").date()
     today = datetime.today().date()
@@ -693,3 +693,97 @@ def get_current_and_previous_sprints(team_name_for_sprint, base_sprint="2025.12"
         f"{team_name_for_sprint} {previous_sprint_year}.{previous_sprint_num:02d}"
     )
 
+def get_summary_issues_by_jql(jql, jira_url, username, api_token, log_list):
+    auth = HTTPBasicAuth(username, api_token)
+    if not jql.strip():
+        log_list.append("ERROR JQL query cannot be empty.")
+        return []
+    
+    issues = []
+    start_at = 0
+    max_results = 50
+    
+    while True:
+        url = f"{jira_url}/rest/api/3/search"
+        params = {
+            "jql": jql,
+            "fields": "key,fields",
+            "startAt": start_at,
+            "maxResults": max_results
+        }
+        try:
+            response = requests.get(url, auth=auth, params=params)
+            response.raise_for_status()
+            data = response.json()
+            batch_issues = data.get("issues", [])
+            issues.extend(batch_issues)
+            if len(batch_issues) < max_results:
+                break
+            start_at += max_results
+        except requests.exceptions.RequestException as e:
+            log_list.append(f"ERROR Network or API error during JQL search: {e}")
+            break
+        except Exception as e:
+            log_list.append(f"ERROR An unexpected error occurred during JQL search: {e}")
+            break
+    return issues
+
+def seconds_to_hours(seconds):
+    if seconds is None or seconds == 0:
+        return 0
+    return round(seconds / 3600, 2)
+
+def prepare_summary_jql_query(team_id, team_name, selected_duration_name, log_list):
+    if selected_duration_name == "Current Sprint":
+        jql = f'"Team[Team]" = "{team_id}" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+    elif selected_duration_name.startswith("Sprint "):
+        sprint_name = selected_duration_name.replace("Sprint ", "")
+        jql = f'"Team[Team]" = "{team_id}" AND sprint = "{team_name} {sprint_name}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+    else:
+        jql = f'"Team[Team]" = "{team_id}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+    
+    log_list.append(f"INFO Generated JQL for {team_name}: {jql}")
+    return jql
+
+def prepare_detailed_jql_query(team_id, selected_duration_name, log_list):
+    if selected_duration_name == "Current Sprint":
+        jql = f'"Team[Team]" = "{team_id}" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+    else:
+        jql = f'"Team[Team]" = "{team_id}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+    
+    log_list.append(f"INFO Generated detailed JQL: {jql}")
+    return jql
+
+# def get_previous_n_sprints(n=5, base_sprint="2025.03", base_start_date_str="2025-02-05", sprint_length_days=14):
+#     base_year, base_sprint_num = map(int, base_sprint.split("."))
+#     base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").date()
+#     today = datetime.today().date()
+
+#     days_elapsed = (today - base_start_date).days
+#     if days_elapsed < 0:
+#         current_sprint_num = base_sprint_num
+#         current_year = base_year
+#     else:
+#         sprint_offset = days_elapsed // sprint_length_days
+#         current_sprint_num = base_sprint_num + sprint_offset
+#         current_year = base_year
+
+#         while current_sprint_num > 52:
+#             current_sprint_num -= 52
+#             current_year += 1
+
+#     sprints = []
+#     for i in range(n):
+#         sprint_num = current_sprint_num - i
+#         sprint_year = current_year
+        
+#         if sprint_num <= 0:
+#             sprint_num += 52
+#             sprint_year -= 1
+            
+#         sprints.append(f"{sprint_year}.{sprint_num:02d}")
+    
+#     return sprints
+
+# def show_sprint_name_start_date_and_end_date(sprint_name):
+#     return f"Sprint: {sprint_name}"

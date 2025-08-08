@@ -6,7 +6,7 @@ import numpy as np
 
 from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date
 from report_detailed import generate_detailed_report, generated_report_df_display
-from report_summary import generate_summary_report, generated_summary_report_df_display, generated_summary_report_df_display
+from report_summary import generate_summary_report, generated_summary_report_df_display
 
 TEAMS_DATA = OrderedDict([
     ("A Team", "34e068f6-978d-4ad9-a4ef-3bf5eec72f65"),
@@ -41,7 +41,6 @@ st.set_page_config(
 )
 
 st.title("📊 Jira Metrics")
-# st.markdown(""" Generate detailed reports from Jira data. """)
 
 # --- Initialize ALL Streamlit session state variables at the TOP LEVEL ---
 if 'log_messages' not in st.session_state: st.session_state.log_messages = []
@@ -61,6 +60,15 @@ if 'selected_detailed_duration_func' not in st.session_state: st.session_state.s
 
 if 'selected_detailed_custom_start_date' not in st.session_state: st.session_state.selected_detailed_custom_start_date = None
 if 'selected_detailed_custom_end_date' not in st.session_state: st.session_state.selected_detailed_custom_end_date = None
+if 'active_tab' not in st.session_state: st.session_state.active_tab = 0
+if 'summary_data' not in st.session_state: st.session_state.summary_data = None
+if 'detailed_data' not in st.session_state: st.session_state.detailed_data = None
+if 'summary_header' not in st.session_state: st.session_state.summary_header = None
+if 'last_summary_selection' not in st.session_state: st.session_state.last_summary_selection = None
+if 'last_detailed_selection' not in st.session_state: st.session_state.last_detailed_selection = None
+if 'switch_to_tab' not in st.session_state: st.session_state.switch_to_tab = None
+if 'auto_generate_summary' not in st.session_state: st.session_state.auto_generate_summary = False
+if 'auto_generate_detailed' not in st.session_state: st.session_state.auto_generate_detailed = False
 
 # --- Main Streamlit App Layout ---
 # --- Sidebar for Jira Credentials and General Report Options ---
@@ -74,10 +82,17 @@ with st.sidebar:
     
     with st.expander("Summary Report", expanded=True):
     # st.header("Summary Report")
-        previous_sprints = get_previous_n_sprints()  # You can pass custom count, base date if needed
-
+        previous_sprints = get_previous_n_sprints(2)  # You can pass custom count, base date if needed
+        
+        # Get current sprint to avoid duplication
+        from common import get_sprint_for_date
+        from datetime import date
+        current_sprint_name, _, _ = get_sprint_for_date(date.today().strftime("%Y-%m-%d"))
+        
+        # Add only previous sprints (exclude current sprint)
         for sprint in previous_sprints:
-            SUMMARY_DURATIONS_DATA[f"Sprint {sprint}"] = sprint
+            if sprint != current_sprint_name:
+                SUMMARY_DURATIONS_DATA[f"Sprint {sprint}"] = sprint
 
         summary_duration_names = list(SUMMARY_DURATIONS_DATA.keys())
         current_summary_duration_name_for_selector = st.session_state.selected_summary_duration_name
@@ -89,6 +104,10 @@ with st.sidebar:
             st.session_state.selected_summary_duration_name = st.session_state.summary_duration_selector_widget_key
             print(f"st.session_state.selected_summary_duration_name : {st.session_state.selected_summary_duration_name}")
             st.session_state.selected_summary_duration_func = SUMMARY_DURATIONS_DATA.get(st.session_state.selected_summary_duration_name)
+            # Clear data when selection changes
+            st.session_state.summary_data = None
+            st.session_state.summary_header = None
+            st.session_state.last_summary_selection = None
 
         st.selectbox(
             "Select Duration",
@@ -99,7 +118,10 @@ with st.sidebar:
             help="Select the time duration for filtering issues."
         )
 
-        generate_summary_button = st.button("Generate Summary Report")
+        if st.button("Generate Summary Report"):
+            generate_summary_button = True
+        else:
+            generate_summary_button = False
 
     st.markdown("---")
 
@@ -115,6 +137,11 @@ with st.sidebar:
         def on_team_selector_change_callback():
             st.session_state.selected_team_name = st.session_state.team_selector_widget_key
             st.session_state.selected_team_id = TEAMS_DATA.get(st.session_state.selected_team_name)
+            # Clear only detailed data when team selection changes
+            st.session_state.detailed_data = None
+            st.session_state.last_detailed_selection = None
+            # Switch to detailed tab
+            st.session_state.switch_to_tab = 1
 
         st.selectbox(
             "Select Team",
@@ -125,8 +152,11 @@ with st.sidebar:
             help="Select the team to filter issues."
         )
 
-        cycle_time_threshold_days = st.number_input("Cycle Time Threshold (days)", min_value=1, value=7, step=1, key="cycle_threshold_days_input")
-        lead_time_threshold_days = st.number_input("Lead Time Threshold (days)", min_value=1, value=21, step=1, key="lead_threshold_days_input")
+        def on_threshold_change():
+            st.session_state.switch_to_tab = 1
+            
+        cycle_time_threshold_days = st.number_input("Cycle Time Threshold (days)", min_value=1, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
+        lead_time_threshold_days = st.number_input("Lead Time Threshold (days)", min_value=1, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
         cycle_threshold_hours = cycle_time_threshold_days * 24
         lead_threshold_hours = lead_time_threshold_days * 24
 
@@ -137,6 +167,11 @@ with st.sidebar:
         def on_detailed_duration_selector_change_callback():
             st.session_state.selected_detailed_duration_name = st.session_state.detailed_duration_selector_widget_key
             st.session_state.selected_detailed_duration_func = DETAILED_DURATIONS_DATA.get(st.session_state.selected_detailed_duration_name)
+            # Clear data when selection changes
+            st.session_state.detailed_data = None
+            st.session_state.last_detailed_selection = None
+            # Switch to detailed tab
+            st.session_state.switch_to_tab = 1
 
         st.selectbox(
             "Select Duration",
@@ -154,7 +189,10 @@ with st.sidebar:
             st.session_state.selected_detailed_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_input")
             st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_input")
 
-        generate_detailed_button = st.button("Generate Detailed Report")
+        if st.button("Generate Detailed Report"):
+            generate_detailed_button = True
+        else:
+            generate_detailed_button = False
 
 
 # --- Helper for capturing Streamlit messages (remains in app.py as UI-level helper) ---
@@ -170,44 +208,80 @@ def add_log_message(log_list, level, message):
 
 # # --- Main Content Area for Report Options ---
 logs_placeholder = st.empty()
+styled_summary_df = None
+
+tab_summary, tab_detailed = st.tabs(["Summary Report", "Detailed Report"])
+
+
+
+with tab_summary:
+    if st.session_state.summary_header is not None:
+        st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
+    
+    if st.session_state.summary_data is not None:
+        st.markdown(st.session_state.summary_data.to_html(escape=False), unsafe_allow_html=True)
+    else:
+        st.info("Click 'Generate Summary Report' to view the summary data.")
+
+with tab_detailed:
+    if st.session_state.detailed_data is not None:
+        from report_detailed import generated_report_df_display
+        generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.log_messages)
+    else:
+        st.info("Click 'Generate Detailed Report' to view the detailed data.")
+
+
+
 
 if generate_summary_button:
-    st.session_state.log_messages = [] 
-    start_time = datetime.now()
-    add_log_message(st.session_state.log_messages, "info", "Generating summary report...")
-
-    sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(st.session_state.selected_summary_duration_name, st.session_state.log_messages)
-
-    today_str = date.today().strftime("%Y-%m-%d")
-    if st.session_state.selected_summary_duration_name == "Current Sprint":
-        st.subheader(f"Leading Indicators - Current Sprint - {sprint_name}")
-    else:
-        st.subheader(f"Leading Indicators - Previous Sprint - {sprint_name}")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f"**Today:** {date.today().strftime('%d-%b-%Y')}")
-
-    with col2:
-        st.markdown(f"**Start Date:** {sprint_start_date.strftime('%d-%b-%Y')}")
-
-    with col3:
-        st.markdown(f"**End Date:** {sprint_end_date.strftime('%d-%b-%Y')}")
-
-    st.markdown("---")
-    all_teams = ("\", \"".join(map(str, list(TEAMS_DATA.values()))))
-
-    jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.log_messages)
+    st.session_state.switch_to_tab = 0
     
-    if jira_conn_details is not None:
+    current_selection = st.session_state.selected_summary_duration_name
+    
+    # Check if selection changed or no data exists
+    if (st.session_state.last_summary_selection == current_selection and 
+        st.session_state.summary_data is not None):
+        add_log_message(st.session_state.log_messages, "info", "Using cached summary data - no selection change detected.")
+    else:
+        st.session_state.log_messages = [] 
+        start_time = datetime.now()
+        add_log_message(st.session_state.log_messages, "info", "Generating summary report...")
+        st.session_state.last_summary_selection = current_selection
 
-        dataCol = st.columns(1)[0]
-        with dataCol:
+        sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(st.session_state.selected_summary_duration_name, st.session_state.log_messages)
+
+        # Create header HTML to store in session state
+        if st.session_state.selected_summary_duration_name == "Current Sprint":
+            header_title = f"Leading Indicators - Current Sprint - {sprint_name}"
+        else:
+            header_title = f"Leading Indicators - Previous Sprint - {sprint_name}"
+        
+        header_html = f"""
+        <h3>{header_title}</h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+            <div><strong>Today:</strong> {date.today().strftime('%d-%b-%Y')}</div>
+            <div><strong>Start Date:</strong> {sprint_start_date.strftime('%d-%b-%Y')}</div>
+            <div><strong>End Date:</strong> {sprint_end_date.strftime('%d-%b-%Y')}</div>
+        </div>
+        <hr>
+        """
+        
+        st.session_state.summary_header = header_html
+        all_teams = ("\", \"".join(map(str, list(TEAMS_DATA.values()))))
+
+        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.log_messages)
+    
+        if jira_conn_details is not None:
             with st.spinner("Fetching issues and generating summary report..."):
-                team_metrics = generate_summary_report(list(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name, st.session_state.log_messages)
+                # Use caching for summary report
+                @st.cache_data(ttl=300)  # Cache for 5 minutes
+                def cached_summary_report(teams_list, conn_details, duration_name):
+                    return generate_summary_report(teams_list, conn_details, duration_name, TEAMS_DATA, st.session_state.log_messages)
+                
+                team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name)
 
                 if team_metrics is not None:
-                    df_jira_metrics = generated_summary_report_df_display(team_metrics)
+                    df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)
 
                     # Sort by Teams
                     df_jira_metrics = df_jira_metrics.sort_values(by="Teams").reset_index(drop=True)
@@ -230,7 +304,7 @@ if generate_summary_button:
                         return styles
 
                     # Apply styles
-                    styled_df = (
+                    styled_summary_df = (
                         df_jira_metrics.style
                         .apply(style_rows, axis=1)
                         .set_table_styles([
@@ -243,79 +317,56 @@ if generate_summary_button:
                         )
                     )
 
-                    # Render as HTML
-                    st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
+                    # Store summary data in session state
+                    st.session_state.summary_data = styled_summary_df
+                    add_log_message(st.session_state.log_messages, "info", f"Summary data stored with {len(df_jira_metrics)} rows")
+                    st.rerun()
 
                 else:
                     add_log_message(st.session_state.log_messages, "error", "Failed to generate detailed report.")
-            
-
-
-        chartCol = st.columns(1)[0]
-        with chartCol: 
-
-            # Define columns you want to visualize
-            # metrics_cols = [
-            #     "Issues", "Story Points", "Issues Complete", "% Completed", "Hours Worked",
-            #     "All Time", "Bugs", "Issues > 1 Sprint", "Points > 1 Sprint", "Sprint/Story"
-            # ]
-
-            # # Ensure these columns exist and drop the 'Total' row
-            # plot_df = df_jira_metrics[df_jira_metrics["Teams"] != "Total"]
-
-            # # Filter only the required numeric columns
-            # if all(col in plot_df.columns for col in metrics_cols):
-            #     st.subheader("📊 Team Metrics Overview")
-            #     st.bar_chart(plot_df.set_index("Teams")[metrics_cols])
-            # else:
-            #     st.warning("Some required columns are missing for the chart.")
-
-
-            # cols_to_plot = ["Issues", "Issues Complete", "Bugs"]
-            # if all(col in df_jira_metrics.columns for col in cols_to_plot):
-            #     st.subheader("📊 Multiple Metrics per Team")
-            #     chart_data = df_jira_metrics[df_jira_metrics["Teams"] != "Total"].set_index("Teams")[cols_to_plot]
-            #     st.bar_chart(chart_data)
-
-                # st.dataframe(df_jira_metrics, use_container_width=True)
-
-                end_time = datetime.now()
-                add_log_message(st.session_state.log_messages, "info", f"Success: Data fetching complete! Duration: {end_time - start_time}")
-        
-    else:
-        add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
-
-if generate_detailed_button:
-    st.session_state.log_messages = []
-    start_time = datetime.now()
-
-    add_log_message(st.session_state.log_messages, "info", "Generating detailed report...")
-    jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.log_messages)
-    
-    if jira_conn_details is not None:
-        jql_query = prepare_detailed_jql_query(st.session_state.selected_team_id, 
-                                                st.session_state.selected_detailed_duration_name, 
-                                                st.session_state.selected_detailed_duration_func, 
-                                                st.session_state.log_messages, 
-                                                st.session_state.selected_detailed_custom_start_date, 
-                                                st.session_state.selected_detailed_custom_end_date)
-        if jql_query is not None:
-            with st.spinner("Fetching issues and generating detailed report..."):
-                df = generate_detailed_report(jira_conn_details, jql_query, st.session_state.selected_team_name, st.session_state.log_messages)
-        
-                if df is not None:
-                    st.subheader(f"📋 Generated Detailed Report Preview")
-                    generated_report_df_display(df, cycle_threshold_hours, lead_threshold_hours, st.session_state.log_messages)
-
+                    
                     end_time = datetime.now()
                     add_log_message(st.session_state.log_messages, "info", f"Success: Data fetching complete! Duration: {end_time - start_time}")
-                
         else:
-            add_log_message(st.session_state.log_messages, "error", "Failed to generate detailed report.")
-    else:
-        add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
+            add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
 
+if generate_detailed_button:
+    st.session_state.switch_to_tab = 1
     
+    current_detailed_selection = (st.session_state.selected_team_id, st.session_state.selected_detailed_duration_name)
+    
+    # Check if selection changed or no data exists
+    if (st.session_state.last_detailed_selection == current_detailed_selection and 
+        st.session_state.detailed_data is not None):
+        add_log_message(st.session_state.log_messages, "info", "Using cached detailed data - no selection change detected.")
+    else:
+        st.session_state.log_messages = []
+        start_time = datetime.now()
+        st.session_state.last_detailed_selection = current_detailed_selection
+
+        add_log_message(st.session_state.log_messages, "info", "Generating detailed report...")
+        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.log_messages)
+    
+        if jira_conn_details is not None:
+            jql_query = prepare_detailed_jql_query(st.session_state.selected_team_id, 
+                                                    st.session_state.selected_detailed_duration_name, 
+                                                    st.session_state.log_messages)
+            
+            with st.spinner("Fetching issues and generating detailed report..."):
+                detailed_report_df = generate_detailed_report(jira_conn_details, jql_query, st.session_state.selected_team_name, st.session_state.log_messages)
+                
+                if detailed_report_df is not None:
+                    st.session_state.detailed_data = detailed_report_df
+                    add_log_message(st.session_state.log_messages, "info", "Detailed report generated successfully!")
+                    st.rerun()
+                else:
+                    add_log_message(st.session_state.log_messages, "error", "Failed to generate detailed report.")
+                    
+                end_time = datetime.now()
+                add_log_message(st.session_state.log_messages, "info", f"Success: Data fetching complete! Duration: {end_time - start_time}")
+        else:
+            add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
+
 
 # Refresh logs in the top placeholder
 with logs_placeholder.expander("View Processing Logs", expanded=False):
@@ -324,3 +375,21 @@ with logs_placeholder.expander("View Processing Logs", expanded=False):
             st.code(log_msg, language="text")
     else:
         st.info("No logs generated yet. Click 'Generate Summary Report' or 'Generate Detailed Report' to see activity.")
+
+# Handle tab switching at the very end after all content is rendered
+if st.session_state.switch_to_tab is not None:
+    tab_index = st.session_state.switch_to_tab
+    st.markdown(
+        f"""
+        <script>
+        setTimeout(function() {{
+            const tabs = document.querySelectorAll('[data-baseweb="tab"]');
+            if (tabs.length > {tab_index}) {{
+                tabs[{tab_index}].click();
+            }}
+        }}, 300);
+        </script>
+        """,
+        unsafe_allow_html=True
+    )
+    st.session_state.switch_to_tab = None

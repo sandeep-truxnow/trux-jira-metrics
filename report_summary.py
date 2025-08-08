@@ -8,7 +8,7 @@ from datetime import datetime
 from collections import defaultdict
 
 from common import get_summary_issues_by_jql, seconds_to_hours, prepare_summary_jql_query, get_issue_changelog, get_logged_time
-from streamlit_trux_jira_metrics import TEAMS_DATA
+
 
 # === GENERATE HEADERS ===
 def generate_headers():
@@ -95,12 +95,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 def get_team_name_by_id(team_id, teams_data):
     return next((name for name, tid in teams_data.items() if tid == team_id), None)
 
-def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, log_list):
+def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, teams_data, log_list):
     jira_url, jira_username, jira_api_token = jira_conn_details
     team_metrics = {}
 
     def process_team(team_id):
-        team_name = get_team_name_by_id(team_id, TEAMS_DATA)
+        team_name = get_team_name_by_id(team_id, teams_data)
         jql = prepare_summary_jql_query(team_id, team_name, selected_summary_duration_name, log_list)
         
         issues = get_summary_issues_by_jql(jql, jira_url, jira_username, jira_api_token, log_list)
@@ -303,10 +303,10 @@ def collect_metrics_streamlit(issues, jira_url, username, api_token, log_list):
    
 #     return team_metrics
 
-def generated_summary_report_df_display(team_metrics):
+def generated_summary_report_df_display(team_metrics, teams_data):
     # Convert to displayable list of rows
     rows = []
-    TEAM_ID_TO_NAME = {v: k for k, v in TEAMS_DATA.items()}
+    TEAM_ID_TO_NAME = {v: k for k, v in teams_data.items()}
 
     for team_id, metrics in team_metrics.items():
         team_name = TEAM_ID_TO_NAME.get(team_id, team_id)

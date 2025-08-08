@@ -188,7 +188,7 @@ def calculate_heatmap_color_blue_gradient(intensity):
     return f"FF{r:02X}{g:02X}{b:02X}"
 
 
-def generate_detailed_report(jira_conn_details, jql_query, selected_team_name_for_report, log_list):
+def generate_detailed_report(jira_conn_details, jql_query, selected_team_name, log_list):
     report_df_for_display = None
     auth_url, auth_username, auth_api_token = jira_conn_details
 
@@ -205,114 +205,120 @@ def generate_detailed_report(jira_conn_details, jql_query, selected_team_name_fo
             auth_url, 
             auth_username, 
             auth_api_token, 
-            selected_team_name_for_report,
+            selected_team_name,
             st.session_state.log_messages
         )
-        # st.session_state.generated_report_df_display = report_df_for_display
         append_log(log_list, "info", "Report generated!")
 
     return report_df_for_display
 
 def generated_report_df_display(df, cycle_threshold_hours, lead_threshold_hours, log_list):
-    if df.empty:
+    if df.empty or df.shape[0] == 0 or df.shape[1] == 0:
         log_list.append("WARN No data available to display in the report preview.")
+        return
 
-    df_size = df.shape
-    if df_size[0] == 0 or df_size[1] == 0:
-        log_list.append("WARN No data available to display in the report preview.")
+    st.markdown(f"**Total Records:** {df.shape[0]}")
 
-    st.markdown(f"**Total Records:** {df_size[0]}")
+    df_for_display_final = prepare_dataframe_for_display(df)
+    styled_df = style_dataframe(
+        df_for_display_final, cycle_threshold_hours, lead_threshold_hours
+    )
+    display_dataframe(styled_df)
+    display_legend()
 
-    # --- Fix: Convert Story Points to string to avoid decimals and handle N/A ---
+
+def prepare_dataframe_for_display(df):
     df_for_display_final = df.copy()
     df_for_display_final.index = df_for_display_final.index + 1
 
     if "Story Points" in df_for_display_final.columns:
         df_for_display_final["Story Points"] = df_for_display_final["Story Points"].apply(
-            lambda x: str(int(x)) if isinstance(x, (int, float)) and not pd.isna(x) else 'N/A' # Convert to int then str, handle NaN
+            lambda x: str(int(x)) if isinstance(x, (int, float)) and not pd.isna(x) else 'N/A'
         )
+    return df_for_display_final
 
-    styled_df = df_for_display_final.style # Start styling here
 
-    # 1. Highlight Breached Durations (Orange)
+def style_dataframe(df, cycle_threshold_hours, lead_threshold_hours):
+    styled_df = df.style
+
     styled_df = styled_df.apply(
         lambda s: highlight_breached_durations_ui(s, cycle_threshold_hours, lead_threshold_hours), axis=1
     )
-    
-    # 2. Apply Workflow Heatmap (Red Gradient)
-    workflow_cols_present = [col for col in WORKFLOW_STATUSES if col in df_for_display_final.columns]
+
+    workflow_cols_present = [col for col in WORKFLOW_STATUSES if col in df.columns]
     if workflow_cols_present:
-            styled_df = styled_df.apply(lambda row: apply_workflow_heatmap_ui(row), axis=1, subset=workflow_cols_present)
-
-    # 3. Apply Story Points Gradient (Blue Gradient)
-    if "Story Points" in df_for_display_final.columns:
-        temp_sp_series = df_for_display_final["Story Points"].apply(lambda x: float(str(x)) if str(x).replace('.','',1).isdigit() else np.nan)
-        
-        numerical_sp_values = temp_sp_series.dropna()
-
-        if not numerical_sp_values.empty:
-            min_sp_data = numerical_sp_values.min()
-            max_sp_data = numerical_sp_values.max()
-            
-            if max_sp_data == min_sp_data:
-                    single_color_val = max(0, min(1, (min_sp_data - 1) / 20.0))
-                    single_hex = calculate_heatmap_color_blue_gradient(single_color_val)
-                    styled_df = styled_df.apply(
-                        lambda s_col: [f'background-color: #{single_hex[2:]}'] * len(s_col), 
-                        subset=["Story Points"]
-                    )
-            else:
-                styled_df = styled_df.apply(
-                    lambda s_col: apply_story_points_gradient_ui(s_col, min_sp_data, max_sp_data), 
-                    subset=["Story Points"]
-                )
-    # --- End Styling ---
-
-        st.dataframe(styled_df, use_container_width=True, column_config={
-            "Key": st.column_config.Column(
-                "Key",
-                width="small",
-                help="Jira Issue Key"
-            ),
-            "Type": st.column_config.Column(
-                "Type",
-                width="small",
-                help="Jira Issue Type"
-            )
-        })
-
-        # --- Display the legend from the image ---
-        st.markdown("##### Legend")
-        st.markdown(
-            """
-            <style>
-            .legend-item {
-                display: flex;
-                align-items: center;
-                margin-bottom: 5px;
-            }
-            .color-box {
-                width: 20px;
-                height: 20px;
-                border: 1px solid #ccc;
-                margin-right: 10px;
-            }
-            </style>
-            <div class="legend-item">
-                <div class="color-box" style="background-color: #FFD580;"></div>
-                <span>Cycle Time / Lead Time > threshold</span>
-            </div>
-            <div class="legend-item">
-                <div class="color-box" style="background-color: #1565C0;"></div>
-                <span>Story Points: Light → Dark Blue (low → high)</span>
-            </div>
-            <div class="legend-item">
-                <div class="color-box" style="background-color: #FF6666;"></div>
-                <span>Workflow: Light → Dark Red (per row, if breached)</span>
-            </div>
-            """, unsafe_allow_html=True
+        styled_df = styled_df.apply(
+            lambda row: apply_workflow_heatmap_ui(row), axis=1, subset=workflow_cols_present
         )
-        # --- End Legend Display ---
+
+    if "Story Points" in df.columns:
+        styled_df = apply_story_points_gradient(styled_df, df["Story Points"])
+    return styled_df
+
+
+def apply_story_points_gradient(styled_df, story_points_column):
+    temp_sp_series = story_points_column.apply(
+        lambda x: float(str(x)) if str(x).replace('.', '', 1).isdigit() else np.nan
+    )
+    numerical_sp_values = temp_sp_series.dropna()
+
+    if not numerical_sp_values.empty:
+        min_sp_data = numerical_sp_values.min()
+        max_sp_data = numerical_sp_values.max()
+
+        if max_sp_data == min_sp_data:
+            single_color_val = max(0, min(1, (min_sp_data - 1) / 20.0))
+            single_hex = calculate_heatmap_color_blue_gradient(single_color_val)
+            styled_df = styled_df.apply(
+                lambda s_col: [f'background-color: #{single_hex[2:]}'] * len(s_col),
+                subset=["Story Points"]
+            )
+        else:
+            styled_df = styled_df.apply(
+                lambda s_col: apply_story_points_gradient_ui(s_col, min_sp_data, max_sp_data),
+                subset=["Story Points"]
+            )
+    return styled_df
+
+
+def display_dataframe(styled_df):
+    st.dataframe(styled_df, use_container_width=True, column_config={
+        "Key": st.column_config.Column("Key", width="small", help="Jira Issue Key"),
+        "Type": st.column_config.Column("Type", width="small", help="Jira Issue Type")
+    })
+
+
+def display_legend():
+    st.markdown("##### Legend")
+    st.markdown(
+        """
+        <style>
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            margin-right: 10px;
+        }
+        </style>
+        <div class="legend-item">
+            <div class="color-box" style="background-color: #FFD580;"></div>
+            <span>Cycle Time / Lead Time > threshold</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-box" style="background-color: #1565C0;"></div>
+            <span>Story Points: Light → Dark Blue (low → high)</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-box" style="background-color: #FF6666;"></div>
+            <span>Workflow: Light → Dark Red (per row, if breached)</span>
+        </div>
+        """, unsafe_allow_html=True
+    )
 
 # === EXTRACT ISSUE META ===
 def extract_issue_meta(key, issue_data, log_list):
@@ -320,39 +326,11 @@ def extract_issue_meta(key, issue_data, log_list):
     if not fields:
         append_log(log_list, "error", f"No fields found for issue {key}.")
         return {}
-    
-    histories = issue_data['changelog']['histories']
-    sprints_field = fields.get('customfield_10010')
 
-    sprint_str = "N/A"
-    if isinstance(sprints_field, list):        
-        sprint_names = []
-        sprints_field.sort(key=lambda x: x.get('id', 0), reverse=True)
-        for sprint in sprints_field:
-            if isinstance(sprint, dict) and 'name' in sprint:
-                sprint_names.append(sprint['name'])
-        sprint_str = ", ".join(sprint_names) if sprint_names else "N/A"
-
-    # Fix: Ensure Story Points are explicitly converted to int if numeric, handle None/NaN
-    story_points_value = fields.get(CUSTOM_FIELD_STORY_POINTS_ID, None) # Default to None if not found
-    if story_points_value is None or (isinstance(story_points_value, float) and np.isnan(story_points_value)):
-        story_points_value = "N/A" # Display "N/A" for missing values
-    elif isinstance(story_points_value, (int, float)):
-        story_points_value = int(story_points_value) # Cast to int
-    elif isinstance(story_points_value, str) and story_points_value.replace('.','',1).isdigit():
-        try:
-            story_points_value = int(float(story_points_value)) # Handle '1.0' as string
-        except ValueError:
-            story_points_value = "N/A" # Fallback if string is not convertible to number
-    else:
-        story_points_value = str(story_points_value) # Keep as string if some other non-numeric type
-
-    failed_qa_count = count_transitions(histories, "In Testing", "Rejected")
-    if failed_qa_count is None:
-        failed_qa_count = 0  # Default to 0 if no transitions found
-
-    logged_time_in_seconds = get_logged_time(histories)      
-    # log_list.append(f"Extracted issue meta for {key}: Type={fields['issuetype']['name']}, Summary={fields['summary']}, Assignee={fields['assignee']['displayName'] if fields['assignee'] else 'Unassigned'}, Status={fields['status']['name']}, Story Points={story_points_value}, Sprints={sprint_str}, Failed QA Count={failed_qa_count}, Logged Time={logged_time_in_seconds}")
+    sprint_str = extract_sprint_string(fields)
+    story_points_value = extract_story_points(fields)
+    failed_qa_count = count_transitions(issue_data['changelog']['histories'], "In Testing", "Rejected") or 0
+    logged_time_in_seconds = get_logged_time(issue_data['changelog']['histories'])
 
     return {
         "Key": key,
@@ -360,8 +338,33 @@ def extract_issue_meta(key, issue_data, log_list):
         "Summary": fields['summary'],
         "Assignee": fields['assignee']['displayName'] if fields['assignee'] else "Unassigned",
         "Status": fields['status']['name'],
-        "Story Points": story_points_value, # Use the potentially converted int/string value
+        "Story Points": story_points_value,
         "Sprints": sprint_str,
         "Failed QA Count": failed_qa_count,
         "Logged Time": seconds_to_hm(logged_time_in_seconds),
     }
+
+def extract_sprint_string(fields):
+    sprints_field = fields.get('customfield_10010')
+    if not isinstance(sprints_field, list):
+        return "N/A"
+
+    sprint_names = []
+    sprints_field.sort(key=lambda x: x.get('id', 0), reverse=True)
+    for sprint in sprints_field:
+        if isinstance(sprint, dict) and 'name' in sprint:
+            sprint_names.append(sprint['name'])
+    return ", ".join(sprint_names) if sprint_names else "N/A"
+
+def extract_story_points(fields):
+    story_points_value = fields.get(CUSTOM_FIELD_STORY_POINTS_ID, None)
+    if story_points_value is None or (isinstance(story_points_value, float) and np.isnan(story_points_value)):
+        return "N/A"
+    if isinstance(story_points_value, (int, float)):
+        return int(story_points_value)
+    if isinstance(story_points_value, str) and story_points_value.replace('.', '', 1).isdigit():
+        try:
+            return int(float(story_points_value))
+        except ValueError:
+            return "N/A"
+    return str(story_points_value)
