@@ -118,10 +118,20 @@ with st.sidebar:
             help="Select the time duration for filtering issues."
         )
 
-        if st.button("Generate Summary Report"):
-            generate_summary_button = True
-        else:
-            generate_summary_button = False
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            if st.button("Generate Summary Report"):
+                generate_summary_button = True
+            else:
+                generate_summary_button = False
+        with col2:
+            if st.button("🔄 Refresh", help="Force refresh data (bypass cache)"):
+                st.cache_data.clear()
+                st.session_state.summary_data = None
+                st.session_state.last_summary_selection = None
+                generate_summary_button = True
+            else:
+                pass
 
     st.markdown("---")
 

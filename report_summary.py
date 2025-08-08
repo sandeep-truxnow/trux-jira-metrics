@@ -214,16 +214,22 @@ def generate_summary_report_streamlit(team_name, issues, jira_url, username, api
 def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, log_list):
     all_metrics = []
 
-    for issue in issues:
+    def process_issue(issue):
         try:
             issue_key = issue.get("key", "")
             issue_data = get_issue_changelog(issue_key, jira_url, username, api_token, log_list)
-            issue_meta = extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_list)
-            all_metrics.append((issue_meta))
-        except requests.exceptions.RequestException as req_e:
-            append_log(log_list, "error", f"Network error fetching issue {issue}: {req_e}")
+            return extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_list)
         except Exception as e:
-            append_log(log_list, "error", f"Error processing issue {issue}: {e}")  
+            append_log(log_list, "error", f"Error processing issue {issue.get('key', 'unknown')}: {e}")
+            return None
+
+    # Process issues in parallel with increased workers
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(process_issue, issue) for issue in issues]
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                all_metrics.append(result)
 
     return all_metrics
 
