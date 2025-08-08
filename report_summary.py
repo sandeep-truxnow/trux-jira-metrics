@@ -4,8 +4,7 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from requests.auth import HTTPBasicAuth
-from datetime import datetime, timezone
-from collections import defaultdict
+from datetime import datetime
 
 from common import seconds_to_hours, get_summary_issues_by_jql, prepare_summary_jql_query, get_issue_changelog, get_logged_time, show_sprint_name_start_date_and_end_date, get_logged_time_per_sprint, get_logged_time_per_sprint
 
