@@ -231,9 +231,10 @@ styled_summary_df = None
 
 tab_summary, tab_detailed = st.tabs(["Summary Report", "Detailed Report"])
 
-
-
 with tab_summary:
+
+
+
     if st.session_state.summary_header is not None:
         st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
     
@@ -261,7 +262,20 @@ with tab_summary:
         st.info("Click 'Generate Summary Report' to view the summary data.")
 
 with tab_detailed:
+    message = "Excludes sub-tasks and includes only issues with status ‘QA Complete’, ‘Released’, or ‘Closed’"
+
     if st.session_state.detailed_data is not None:
+        # Show human-readable description
+        if st.session_state.selected_detailed_duration_name == "Current Sprint":
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team in the current active sprint. __{message}.__"
+        elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team from {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}. __{message}.__"
+        else:
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team for {st.session_state.selected_detailed_duration_name}. __{message}.__"
+        
+        st.markdown(description)
+        # st.markdown("---")
+        
         from report_detailed import generated_report_df_display
         generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.log_messages)
     else:
@@ -271,7 +285,6 @@ with tab_detailed:
 
 
 if generate_summary_button:
-    st.session_state.switch_to_tab = 0
     
     current_selection = st.session_state.selected_summary_duration_name
     
@@ -379,8 +392,7 @@ if generate_summary_button:
             add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
 
 if generate_detailed_button:
-    st.session_state.switch_to_tab = 1
-    add_log_message(st.session_state.log_messages, "info", "Generate detailed button clicked, switching to tab 1")
+    add_log_message(st.session_state.log_messages, "info", "Generate detailed button clicked, switching to detailed tab")
     
     current_detailed_selection = (st.session_state.selected_team_id, st.session_state.selected_detailed_duration_name)
     
@@ -427,20 +439,24 @@ with logs_placeholder.expander("View Processing Logs", expanded=False):
     else:
         st.info("No logs generated yet. Click 'Generate Summary Report' or 'Generate Detailed Report' to see activity.")
 
-# Handle tab switching at the very end after all content is rendered
-if st.session_state.switch_to_tab is not None:
-    tab_index = st.session_state.switch_to_tab
+# Simple tab switching at the end
+if generate_summary_button or generate_detailed_button:
+    tab_to_switch = 0 if generate_summary_button else 1
     st.markdown(
         f"""
         <script>
         setTimeout(function() {{
             const tabs = document.querySelectorAll('[data-baseweb="tab"]');
-            if (tabs.length > {tab_index}) {{
-                tabs[{tab_index}].click();
+            if (tabs.length > {tab_to_switch}) {{
+                tabs[{tab_to_switch}].click();
             }}
-        }}, 300);
+        }}, 200);
         </script>
         """,
         unsafe_allow_html=True
     )
-    st.session_state.switch_to_tab = None
+
+
+
+
+

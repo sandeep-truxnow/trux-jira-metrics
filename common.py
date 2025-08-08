@@ -9,7 +9,7 @@ from collections import OrderedDict
 import re
 from datetime import datetime, timezone
 
-STATUS_INPUT = "'Released', 'Closed'"
+STATUS_INPUT = "'QA Complete', 'Released', 'Closed'"
 CYCLE_STATUSES = ["In Progress", "In Review", "Ready for Testing", "In Testing"]
 WORKFLOW_STATUSES = [
     "To Do", "In Progress", "Paused", "In Review", "Ready for Testing",
@@ -110,7 +110,6 @@ def prepare_detailed_jql_query(selected_team_id, selected_detailed_duration_name
     else:
         # For all other durations, include status filter
         duration_func = DETAILED_DURATIONS_DATA.get(selected_detailed_duration_name, "")
-        print(f"duration_func: {duration_func}")
         
         if duration_func == "customDateRange()":
             # Custom date range handling using session state dates
