@@ -349,15 +349,14 @@ def generated_summary_report_df_display(team_metrics, teams_data):
 
     df = pd.DataFrame(rows, columns=generate_headers())
 
-    # Format % Complete column with % symbol
-    df["% Complete"] = df["% Complete"].apply(lambda x: f"{x:.0f}%")
+    # Keep % Complete as numeric for proper alignment
 
     # add total to each column, for the Teams Column, show label as Total
     total_row = df.select_dtypes(include='number').sum(numeric_only=True)
     
-    # Calculate average for % Complete instead of sum (before formatting)
+    # Calculate average for % Complete and keep as numeric
     avg_percent = rows and sum(row[4] for row in rows) / len(rows) or 0
-    total_row["% Complete"] = f"{avg_percent:.0f}%"
+    total_row["% Complete"] = avg_percent
 
     # Add 'Teams' label
     total_row["Teams"] = "Grand Total"
