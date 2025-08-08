@@ -239,7 +239,7 @@ with tab_summary:
         st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
     
     if st.session_state.summary_data is not None:
-        st.markdown(st.session_state.summary_data.to_html(escape=False), unsafe_allow_html=True)
+        st.dataframe(st.session_state.summary_data, use_container_width=True, hide_index=True)
         
         # Add collapsible legend below the summary table
         with st.expander("📋 Column Definitions", expanded=False):
