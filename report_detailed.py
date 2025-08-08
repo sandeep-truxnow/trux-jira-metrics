@@ -6,9 +6,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
-from common import format_duration, duration_to_hours, WORKFLOW_STATUSES, get_issue_changelog, calculate_state_durations, get_issues_by_jql, count_transitions, get_logged_time, seconds_to_hm
-from report_excel import get_current_and_previous_sprints
-
+from common import get_current_and_previous_sprints, format_duration, duration_to_hours, WORKFLOW_STATUSES, get_issue_changelog, calculate_state_durations, get_issues_by_jql, count_transitions, get_logged_time, seconds_to_hm
 
 # === GENERATE HEADERS ===
 def generate_headers():
