@@ -186,8 +186,13 @@ with st.sidebar:
             start_default = st.session_state.selected_detailed_custom_start_date if st.session_state.selected_detailed_custom_start_date else date(2025, 1, 1)
             end_default = st.session_state.selected_detailed_custom_end_date if st.session_state.selected_detailed_custom_end_date else date.today()
             
-            st.session_state.selected_detailed_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_input")
-            st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_input")
+            def on_date_change():
+                st.session_state.detailed_data = None
+                st.session_state.last_detailed_selection = None
+                st.session_state.switch_to_tab = 1
+            
+            st.session_state.selected_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_input", on_change=on_date_change)
+            st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_input", on_change=on_date_change)
 
         if st.button("Generate Detailed Report"):
             generate_detailed_button = True
