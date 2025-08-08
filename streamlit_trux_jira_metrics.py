@@ -306,7 +306,11 @@ if generate_summary_button:
                         df_jira_metrics.style
                         .apply(style_rows, axis=1)
                         .set_table_styles([
-                            {'selector': 'th', 'props': [('font-weight', 'bold')]}
+                            {'selector': 'th', 'props': [('font-weight', 'bold')]},
+                            {'selector': 'table', 'props': [('width', '100%'), ('table-layout', 'fixed')]},
+                            {'selector': 'th, td', 'props': [('width', '9.09%'), ('text-align', 'center'), ('padding', '8px')]},
+                            {'selector': '.row_heading', 'props': [('display', 'none')]},
+                            {'selector': '.blank', 'props': [('display', 'none')]}
                         ])
                         .format(
                             formatter={"% Completed": "{:.0f}%"},

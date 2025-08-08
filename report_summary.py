@@ -4,10 +4,10 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from requests.auth import HTTPBasicAuth
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
-from common import get_summary_issues_by_jql, seconds_to_hours, prepare_summary_jql_query, get_issue_changelog, get_logged_time
+from common import seconds_to_hours, get_summary_issues_by_jql, prepare_summary_jql_query, get_issue_changelog, get_logged_time, show_sprint_name_start_date_and_end_date, get_logged_time_per_sprint, get_logged_time_per_sprint
 
 
 # === GENERATE HEADERS ===
@@ -65,7 +65,7 @@ def append_log(log_list, level, message):
 #         total_issues = len(all_metrics)
 #         total_story_points = sum(issue['story_points'] for issue in all_metrics)
 #         total_issues_closed = sum(issue['issues_closed'] for issue in all_metrics)
-#         total_hours_closed = sum(issue['hours_worked'] for issue in all_metrics)
+#         total_hours_worked = sum(issue['hours_worked'] for issue in all_metrics)
 #         total_bugs = sum(issue['bug_count'] for issue in all_metrics)
 #         # total_sprint_counts = [issue['sprint_counts'] for issue in all_metrics]
 #         total_spillover_issues = sum(issue['spillover_issues'] for issue in all_metrics)
@@ -79,7 +79,7 @@ def append_log(log_list, level, message):
 #             "Story Points": total_story_points,
 #             "Issues Completed": total_issues_closed,
 #             "% Completed": percent_work_complete,
-#             "Hours Worked": total_hours_closed,
+#             "Hours Worked": total_hours_worked,
 #             "Bugs": total_bugs,
 #             "Spillover Issues": total_spillover_issues,
 #             "Spillover Story Points": total_spillover_points,
@@ -112,13 +112,15 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             append_log(log_list, "info", f"Found {len(issues)} issues for team {team_name}.")
 
         all_metrics = generate_summary_report_streamlit(
-            team_name, issues, jira_url, jira_username, jira_api_token, log_list
+            team_name, issues, jira_url, jira_username, jira_api_token, selected_summary_duration_name, log_list
         )
 
+        # do none check
         total_issues = len(all_metrics)
         total_story_points = sum(issue['story_points'] for issue in all_metrics)
         total_issues_closed = sum(issue['issues_closed'] for issue in all_metrics)
-        total_hours_closed = sum(issue['hours_worked'] for issue in all_metrics)
+        total_hours_worked = sum(issue['hours_worked'] for issue in all_metrics)
+        total_all_time = sum(issue['all_time'] for issue in all_metrics)
         total_bugs = sum(issue['bug_count'] for issue in all_metrics)
         total_spillover_issues = sum(issue['spillover_issues'] for issue in all_metrics)
         total_spillover_points = sum(issue['spillover_story_points'] for issue in all_metrics)
@@ -132,7 +134,8 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             "Story Points": total_story_points,
             "Issues Completed": total_issues_closed,
             "% Completed": percent_work_complete,
-            "Hours Worked": total_hours_closed,
+            "Hours Worked": seconds_to_hours(total_hours_worked),
+            "All Time": seconds_to_hours(total_all_time),
             "Bugs": total_bugs,
             "Spillover Issues": total_spillover_issues,
             "Spillover Story Points": total_spillover_points,
@@ -196,9 +199,9 @@ def get_issue_summary_by_jql(jql, jira_url, username, api_token, log_list):
 def generated_summary_report_df_display():
     return ""
 
-def generate_summary_report_streamlit(team_name, issues, jira_url, username, api_token, log_list):
+def generate_summary_report_streamlit(team_name, issues, jira_url, username, api_token, selected_summary_duration_name, log_list):
     append_log(log_list, "info", f"Collecting metrics for {len(issues)} issues. This may take a while...")
-    all_metrics = collect_metrics_streamlit(issues, jira_url, username, api_token,  log_list)
+    all_metrics = collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, log_list)
     
     if not all_metrics:
         append_log(log_list, "warn", "No metrics collected. Report will be empty.")
@@ -207,14 +210,14 @@ def generate_summary_report_streamlit(team_name, issues, jira_url, username, api
     append_log(log_list, "info", f"{team_name} metrics generated successfully!")
     return all_metrics
 
-def collect_metrics_streamlit(issues, jira_url, username, api_token, log_list):
+def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, log_list):
     all_metrics = []
 
     for issue in issues:
         try:
             issue_key = issue.get("key", "")
             issue_data = get_issue_changelog(issue_key, jira_url, username, api_token, log_list)
-            issue_meta = extract_issue_meta(issue, issue_data, log_list)
+            issue_meta = extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_list)
             all_metrics.append((issue_meta))
         except requests.exceptions.RequestException as req_e:
             append_log(log_list, "error", f"Network error fetching issue {issue}: {req_e}")
@@ -320,7 +323,7 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             metrics.get("Issues Completed", 0),
             metrics.get("% Completed", 0.0),
             metrics.get("Hours Worked", 0.0),
-            "",  # Placeholder for All Time
+            metrics.get("All Time", 0.0),
             metrics.get("Bugs", 0),
             metrics.get("Spillover Issues", 0),
             metrics.get("Spillover Story Points", 0),
@@ -329,10 +332,17 @@ def generated_summary_report_df_display(team_metrics, teams_data):
 
     df = pd.DataFrame(rows, columns=generate_headers())
 
+    # Format % Complete column with % symbol
+    df["% Complete"] = df["% Complete"].apply(lambda x: f"{x:.0f}%")
+
     # add total to each column, for the Teams Column, show label as Total
     total_row = df.select_dtypes(include='number').sum(numeric_only=True)
+    
+    # Calculate average for % Complete instead of sum (before formatting)
+    avg_percent = rows and sum(row[4] for row in rows) / len(rows) or 0
+    total_row["% Complete"] = f"{avg_percent:.0f}%"
 
-    # Add 'Teams' label with bold markdown
+    # Add 'Teams' label
     total_row["Teams"] = "Total"
 
     # Append the row as the last row
@@ -342,8 +352,11 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     
 
 # === EXTRACT ISSUE META ===
-def extract_issue_meta(issue, issue_data, log_list):
+def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_list):
     key = issue.get("key", "")
+
+    _, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
+
     story_points = 0
     issues_closed = 0
     bug_count = 0
@@ -357,19 +370,9 @@ def extract_issue_meta(issue, issue_data, log_list):
         return {}
     
     histories = issue_data['changelog']['histories']
-    # sprints_field = fields.get('customfield_10010')
     sprints = fields.get("customfield_10010", [])  # Sprint field
     issue_type = fields.get('issuetype', {}).get('name', '')
     status = fields.get('status', {}).get('name', '')
-
-    # sprint_str = "N/A"
-    # if isinstance(sprints_field, list):        
-    #     sprint_names = []
-    #     sprints_field.sort(key=lambda x: x.get('id', 0), reverse=True)
-    #     for sprint in sprints_field:
-    #         if isinstance(sprint, dict) and 'name' in sprint:
-    #             sprint_names.append(sprint['name'])
-    #     sprint_str = ", ".join(sprint_names) if sprint_names else "N/A"
 
     story_points = fields.get(CUSTOM_FIELD_STORY_POINTS_ID, None) # Default to None if not found
     if story_points is None or (isinstance(story_points, float) and np.isnan(story_points)):
@@ -393,14 +396,17 @@ def extract_issue_meta(issue, issue_data, log_list):
     if status.lower() in ["done", "qa complete", "released", "closed"]:
         issues_closed += 1
 
-    logged_time_in_seconds = get_logged_time(histories)      
+    total_all_time_logged_time_in_seconds = get_logged_time(histories)
+
+    worked_in_current_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)    
 
     # append_log(log_list, "info", f"Extracted issue meta for {key}: story_points={story_points}, issues_closed={issues_closed}, bug_count={bug_count}, Status={fields['status']['name']}, issues_more_than_1_sprint={issues_more_than_1_sprint}, story_points_more_than_1_sprint={story_points_more_than_1_sprint}")
     return {
         "key": key,
         "story_points": story_points, 
         "issues_closed": issues_closed,
-        "hours_worked": seconds_to_hours(logged_time_in_seconds),     
+        "hours_worked": worked_in_current_sprint,   
+        "all_time": total_all_time_logged_time_in_seconds,
         "bug_count": bug_count,
         "sprint_counts": sprint_counts,
         "spillover_issues": spillover_issues,

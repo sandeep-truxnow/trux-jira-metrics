@@ -4,9 +4,10 @@ import requests
 from requests.auth import HTTPBasicAuth
 from jira import JIRA
 from jira.exceptions import JIRAError
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from collections import OrderedDict
 import re
+from datetime import datetime, timezone
 
 STATUS_INPUT = "'Released', 'Closed'"
 CYCLE_STATUSES = ["In Progress", "In Review", "Ready for Testing", "In Testing"]
@@ -67,8 +68,6 @@ def show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log
     sprint_name = None
     sprint_start_date = None
     sprint_end_date = None
-
-    # print(f"selected_summary_duration_name : {selected_summary_duration_name}")
 
     if selected_summary_duration_name == "Current Sprint":
         today_str = date.today().strftime("%Y-%m-%d")
@@ -463,6 +462,58 @@ def get_logged_time(histories):
                 return int(item['to'])
     return 0
 
+# def get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date):
+#     total_logged_seconds = 0
+
+#     # Handle both date objects and strings
+#     if isinstance(sprint_start_date, date):
+#         start_dt = datetime.combine(sprint_start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+#     else:
+#         start_dt = datetime.strptime(sprint_start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    
+#     if isinstance(sprint_end_date, date):
+#         end_dt = datetime.combine(sprint_end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+#     else:
+#         end_dt = datetime.strptime(sprint_end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+#     for history in histories:
+#         created_dt = datetime.strptime(history["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+
+#         if start_dt <= created_dt <= end_dt:
+#             for item in history.get("items", []):
+#                 if item.get("field") == "timespent":
+#                     from_val = int(item.get("from") or 0)
+#                     to_val = int(item.get("to") or 0)
+#                     total_logged_seconds += max(0, to_val - from_val)
+
+#     return total_logged_seconds
+
+
+def parse_date(dt):
+    """Convert date or string to UTC datetime."""
+    if isinstance(dt, date):
+        return datetime.combine(dt, datetime.min.time()).replace(tzinfo=timezone.utc)
+    return datetime.strptime(dt, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+def get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date):
+    total_logged_seconds = 0
+    start_dt, end_dt = parse_date(sprint_start_date), parse_date(sprint_end_date).replace(hour=23, minute=59, second=59)
+
+    for history in histories:
+        created_dt = datetime.strptime(history["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+        if not (start_dt <= created_dt <= end_dt):
+            continue
+
+        for item in history.get("items", []):
+            if item.get("field") != "timespent":
+                continue
+            from_val = int(item.get("from") or 0)
+            to_val = int(item.get("to") or 0)
+            total_logged_seconds += max(0, to_val - from_val)
+
+    return total_logged_seconds
+
+
 # === CALCULATE DURATIONS ===
 def calculate_durations(transitions, created_time, issue_key, log_list):
     durations = {}
@@ -567,11 +618,6 @@ def get_sprint_for_date(target_date, base_sprint="2025.12", base_start_date_str=
 
     return sprint_name, sprint_start_date, sprint_end_date
 
-from datetime import datetime, date
-if __name__ == "__main__":
-    today_str = date.today().strftime("%Y-%m-%d")
-    sprint_name, sprint_start_date, sprint_end_date = get_sprint_for_date(today_str)
-    print(f"Today's sprint: {sprint_name} : sprint_start_date: {sprint_start_date} : sprint_end_date: {sprint_end_date}")
 
 def get_sprint_dates_from_name(sprint_name, base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
     base_year, base_sprint_num = map(int, base_sprint.split("."))
