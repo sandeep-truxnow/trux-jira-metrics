@@ -225,6 +225,7 @@ def generated_report_df_display(df, cycle_threshold_hours, lead_threshold_hours,
     )
     display_dataframe(styled_df)
     display_legend()
+    display_column_definitions()    
 
 
 def prepare_dataframe_for_display(df):
@@ -288,37 +289,54 @@ def display_dataframe(styled_df):
     })
 
 
+def display_column_definitions():
+    with st.expander("📋 Column Definitions", expanded=False):
+        st.markdown("""
+        - **Key**: Jira issue key/identifier
+        - **Type**: Issue type (Story, Bug, Task, etc.)
+        - **Summary**: Brief description of the issue
+        - **Assignee**: Person assigned to work on the issue
+        - **Status**: Current status of the issue
+        - **Story Points**: Estimated effort/complexity points
+        - **Sprints**: Sprint(s) the issue has been part of (🔶 = current, 🔷 = previous)
+        - **Failed QA Count**: Number of times issue was rejected from "In Testing" status
+        - **Logged Time**: Total time logged on the issue
+        - **Cycle Time**: Time from "In Progress" to "QA Complete" (development time)
+        - **Lead Time**: Time from issue creation to "Done/Closed/Released" (total delivery time)
+        - **Workflow Status Columns**: Time spent in each workflow status (To Do, In Progress, etc.)
+        """)
+
 def display_legend():
-    st.markdown("##### Legend")
-    st.markdown(
-        """
-        <style>
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .color-box {
-            width: 20px;
-            height: 20px;
-            border: 1px solid #ccc;
-            margin-right: 10px;
-        }
-        </style>
-        <div class="legend-item">
-            <div class="color-box" style="background-color: #FFD580;"></div>
-            <span>Cycle Time / Lead Time > threshold</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-box" style="background-color: #1565C0;"></div>
-            <span>Story Points: Light → Dark Blue (low → high)</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-box" style="background-color: #FF6666;"></div>
-            <span>Workflow: Light → Dark Red (per row, if breached)</span>
-        </div>
-        """, unsafe_allow_html=True
-    )
+    with st.expander("🎨 Legend", expanded=False):
+        st.markdown(
+            """
+            <style>
+            .legend-item {
+                display: flex;
+                align-items: center;
+                margin-bottom: 5px;
+            }
+            .color-box {
+                width: 20px;
+                height: 20px;
+                border: 1px solid #ccc;
+                margin-right: 10px;
+            }
+            </style>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #FFD580;"></div>
+                <span>Cycle Time / Lead Time > threshold</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #1565C0;"></div>
+                <span>Story Points: Light → Dark Blue (low → high)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #FF6666;"></div>
+                <span>Workflow: Light → Dark Red (per row, if breached)</span>
+            </div>
+            """, unsafe_allow_html=True
+        )
 
 # === EXTRACT ISSUE META ===
 def extract_issue_meta(key, issue_data, log_list):

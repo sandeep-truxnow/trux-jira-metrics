@@ -239,6 +239,24 @@ with tab_summary:
     
     if st.session_state.summary_data is not None:
         st.markdown(st.session_state.summary_data.to_html(escape=False), unsafe_allow_html=True)
+        
+        # Add collapsible legend below the summary table
+        with st.expander("📋 Column Definitions", expanded=False):
+            st.markdown("""
+            - **Teams**: Team name
+            - **Total Issues**: Total number of issues assigned to the team
+            - **Story Points**: Sum of story points for all issues
+            - **Issues Completed**: Issues with status: "Done", "QA Complete", "Released", or "Closed"
+            - **% Complete**: Percentage of completed issues out of total issues
+            - **Hours Worked**: Time logged during the current sprint period (in hours)
+            - **All Time**: Total time logged across all sprints for these issues (in hours)
+            - **Bugs**: Number of issues with type "Bug"
+            - **Failed QA Count**: Number of times issues transitioned from "In Testing" to "Rejected"
+            - **Spillover Issues**: Issues that span multiple sprints
+            - **Spillover Story Points**: Story points from issues that span multiple sprints
+            - **Avg Completion Days**: Average number of days from issue creation to completion
+            - **Avg Sprints/Story**: Average number of sprints per story for completed issues
+            """)
     else:
         st.info("Click 'Generate Summary Report' to view the summary data.")
 
