@@ -6,12 +6,12 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 
-from common import seconds_to_hours, get_summary_issues_by_jql, prepare_summary_jql_query, get_issue_changelog, get_logged_time, show_sprint_name_start_date_and_end_date, get_logged_time_per_sprint, get_logged_time_per_sprint
+from common import seconds_to_hours, get_summary_issues_by_jql, prepare_summary_jql_query, get_issue_changelog, get_logged_time, show_sprint_name_start_date_and_end_date, get_logged_time_per_sprint, get_logged_time_per_sprint, count_transitions
 
 
 # === GENERATE HEADERS ===
 def generate_headers():
-    return ["Teams", "Issues", "Story Points", "Issues Complete", "% Complete", "Hours Worked", "All Time", "Bugs", "Issues > 1 Sprint", "Points > 1 Sprint", "Sprint/Story"]
+    return ["Teams", "Issues", "Story Points", "Issues Complete", "% Complete", "Hours Worked", "All Time", "Bugs", "Failed QA Count", "Issues > 1 Sprint", "Points > 1 Sprint", "Sprint/Story"]
 
 
 # --- Custom Field IDs ---
@@ -120,6 +120,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         total_issues_closed = sum(issue['issues_closed'] for issue in all_metrics)
         total_hours_worked = sum(issue['hours_worked'] for issue in all_metrics)
         total_all_time = sum(issue['all_time'] for issue in all_metrics)
+        total_failed_qa_count = sum(issue['failed_qa_count'] for issue in all_metrics)
         total_bugs = sum(issue['bug_count'] for issue in all_metrics)
         total_spillover_issues = sum(issue['spillover_issues'] for issue in all_metrics)
         total_spillover_points = sum(issue['spillover_story_points'] for issue in all_metrics)
@@ -136,6 +137,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             "Hours Worked": seconds_to_hours(total_hours_worked),
             "All Time": seconds_to_hours(total_all_time),
             "Bugs": total_bugs,
+            "Failed QA Count": total_failed_qa_count,
             "Spillover Issues": total_spillover_issues,
             "Spillover Story Points": total_spillover_points,
         }
@@ -324,6 +326,7 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             metrics.get("Hours Worked", 0.0),
             metrics.get("All Time", 0.0),
             metrics.get("Bugs", 0),
+            metrics.get("Failed QA Count", 0),
             metrics.get("Spillover Issues", 0),
             metrics.get("Spillover Story Points", 0),
             metrics.get("Sprints/Story Ratio", 0),
@@ -342,7 +345,7 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     total_row["% Complete"] = f"{avg_percent:.0f}%"
 
     # Add 'Teams' label
-    total_row["Teams"] = "Total"
+    total_row["Teams"] = "Grand Total"
 
     # Append the row as the last row
     df.loc[len(df)] = total_row
@@ -395,6 +398,11 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_li
     if status.lower() in ["done", "qa complete", "released", "closed"]:
         issues_closed += 1
 
+    # failed QA count
+    failed_qa_count = count_transitions(histories, "In Testing", "Rejected")
+    if failed_qa_count is None:
+        failed_qa_count = 0  # Default to 0 if no transitions found
+
     total_all_time_logged_time_in_seconds = get_logged_time(histories)
 
     worked_in_current_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)    
@@ -407,6 +415,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_li
         "hours_worked": worked_in_current_sprint,   
         "all_time": total_all_time_logged_time_in_seconds,
         "bug_count": bug_count,
+        "failed_qa_count": failed_qa_count,
         "sprint_counts": sprint_counts,
         "spillover_issues": spillover_issues,
         "spillover_story_points": spillover_story_points,

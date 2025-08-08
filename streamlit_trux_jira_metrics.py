@@ -3,6 +3,7 @@ from datetime import datetime
 from collections import OrderedDict
 from datetime import datetime, date
 import numpy as np
+import pandas as pd
 
 from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date, DETAILED_DURATIONS_DATA
 from report_detailed import generate_detailed_report, generated_report_df_display
@@ -281,8 +282,15 @@ if generate_summary_button:
                 if team_metrics is not None:
                     df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)
 
-                    # Sort by Teams
-                    df_jira_metrics = df_jira_metrics.sort_values(by="Teams").reset_index(drop=True)
+                    # Separate Grand Total row and sort only team rows
+                    grand_total_row = df_jira_metrics[df_jira_metrics["Teams"] == "Grand Total"]
+                    team_rows = df_jira_metrics[df_jira_metrics["Teams"] != "Grand Total"]
+                    
+                    # Sort team rows by Teams column
+                    team_rows_sorted = team_rows.sort_values(by="Teams").reset_index(drop=True)
+                    
+                    # Combine sorted team rows with Grand Total at the bottom
+                    df_jira_metrics = pd.concat([team_rows_sorted, grand_total_row], ignore_index=True)
 
                     df_jira_metrics.index = np.arange(1, len(df_jira_metrics) + 1)
 
