@@ -198,15 +198,15 @@ def generate_detailed_report(jira_conn_details, jql_query, selected_team_name, l
         append_log(log_list, "warn", "No issues found matching the JQL query. Report will be empty.")
         st.session_state.generated_report_df_display = None
 
-        message = "Excludes sub-tasks and includes only issues with status ‘QA Complete’, ‘Released’, or ‘Closed’"
+        message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'QA Complete', 'Released', or 'Closed'."
         
         # Show human-readable explanation
         if "openSprints()" in jql_query:
-            st.warning(f"No issues found for **{selected_team_name}** team in the current active sprint. The team may not have any issues assigned for the current sprint. {message}")
+            st.warning(f"No issues found for **{selected_team_name}** team in the current active sprint. The team may not have any issues assigned for the current sprint. __{message}__.")
         elif "Custom Date Range" in jql_query:
-            st.warning(f"No issues found for **{selected_team_name}** team in the selected date range. Try expanding the date range or check if the team has issues in this period. {message}")
+            st.warning(f"No issues found for **{selected_team_name}** team in the selected date range. Try expanding the date range or check if the team has issues in this period. __{message}__.")
         else:
-            st.warning(f"No issues found for **{selected_team_name}** team in the selected time period. The team may not have any issues assigned for this duration. {message}")
+            st.warning(f"No issues found for **{selected_team_name}** team in the selected time period. The team may not have any issues assigned for this duration. __{message}__.")
     else:
         append_log(log_list, "info", f"Found {len(issue_keys)} issues matching the JQL query.")
         report_df_for_display = generate_report_streamlit(

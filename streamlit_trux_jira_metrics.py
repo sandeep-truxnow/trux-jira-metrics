@@ -262,16 +262,17 @@ with tab_summary:
         st.info("Click 'Generate Summary Report' to view the summary data.")
 
 with tab_detailed:
-    message = "Excludes sub-tasks and includes only issues with status ‘QA Complete’, ‘Released’, or ‘Closed’"
+    common_message = "This report is filtered and excludes sub-tasks"
+    status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'QA Complete', 'Released', or 'Closed'."
 
     if st.session_state.detailed_data is not None:
         # Show human-readable description
         if st.session_state.selected_detailed_duration_name == "Current Sprint":
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team in the current active sprint. __{message}.__"
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team in the current active sprint. __{common_message}__."
         elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team from {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}. __{message}.__"
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team from {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}. __{status_message}__."
         else:
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team for {st.session_state.selected_detailed_duration_name}. __{message}.__"
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team for {st.session_state.selected_detailed_duration_name}. __{status_message}__."
         
         st.markdown(description)
         # st.markdown("---")
