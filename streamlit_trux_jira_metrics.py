@@ -239,6 +239,7 @@ with tab_summary:
         st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
     
     if st.session_state.summary_data is not None:
+        st.info("ℹ️ This report is filtered and excludes sub-tasks.")
         st.dataframe(
             st.session_state.summary_data, 
             use_container_width=True, 
@@ -278,11 +279,14 @@ with tab_detailed:
     if st.session_state.detailed_data is not None:
         # Show human-readable description
         if st.session_state.selected_detailed_duration_name == "Current Sprint":
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team in the current active sprint. __{common_message}__."
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team in the current active sprint"
+            st.info(f"ℹ️ {common_message}.")
         elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team from {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}. __{status_message}__."
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team from {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}"
+            st.info(f"ℹ️ {status_message}.")
         else:
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team for {st.session_state.selected_detailed_duration_name}. __{status_message}__."
+            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team for {st.session_state.selected_detailed_duration_name}"
+            st.info(f"ℹ️ {status_message}.")
         
         st.markdown(description)
         # st.markdown("---")
