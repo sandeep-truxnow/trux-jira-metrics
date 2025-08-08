@@ -8,7 +8,7 @@ from datetime import datetime
 from collections import defaultdict
 
 from common import get_summary_issues_by_jql, seconds_to_hours, prepare_summary_jql_query, get_issue_changelog, get_logged_time
-from streamlit_jira_metrics import TEAMS_DATA
+from streamlit_trux_jira_metrics import TEAMS_DATA
 
 # === GENERATE HEADERS ===
 def generate_headers():
