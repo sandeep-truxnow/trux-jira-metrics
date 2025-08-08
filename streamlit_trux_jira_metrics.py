@@ -33,6 +33,16 @@ st.set_page_config(
 
 st.title("📊 Jira Metrics")
 
+# --- Helper for capturing Streamlit messages ---
+def add_log_message(log_list, level, message):
+    """Appends a timestamped log message to the log list and optionally displays immediate feedback."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_list.append(f"[{timestamp}] [{level.upper()}] {message}")
+    if level == "error" or level == "critical":
+        st.error(f"[{timestamp}] {message}")
+    elif level == "warning":
+        st.warning(f"[{timestamp}] {message}")
+
 # --- Initialize ALL Streamlit session state variables at the TOP LEVEL ---
 if 'log_messages' not in st.session_state: st.session_state.log_messages = []
 if 'jira_conn_details' not in st.session_state: st.session_state.jira_conn_details = None
@@ -73,7 +83,7 @@ with st.sidebar:
     
     with st.expander("Summary Report", expanded=True):
     # st.header("Summary Report")
-        previous_sprints = get_previous_n_sprints(2)  # You can pass custom count, base date if needed
+        previous_sprints = get_previous_n_sprints(3)
         
         # Get current sprint to avoid duplication
         from common import get_sprint_for_date
@@ -186,15 +196,7 @@ with st.sidebar:
             generate_detailed_button = False
 
 
-# --- Helper for capturing Streamlit messages (remains in app.py as UI-level helper) ---
-def add_log_message(log_list, level, message):
-    """Appends a timestamped log message to the log list and optionally displays immediate feedback."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_list.append(f"[{timestamp}] [{level.upper()}] {message}")
-    if level == "error" or level == "critical":
-        st.error(f"[{timestamp}] {message}")
-    elif level == "warning":
-        st.warning(f"[{timestamp}] {message}")
+
 
 
 # # --- Main Content Area for Report Options ---
