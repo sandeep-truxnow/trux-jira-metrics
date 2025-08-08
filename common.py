@@ -1,22 +1,29 @@
 # --- Jira Connection Function ---
 import streamlit as st
-# import pandas as pd
-# import plotly.graph_objects as go
-# import numpy as np
 import requests
 from requests.auth import HTTPBasicAuth
 from jira import JIRA
 from jira.exceptions import JIRAError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from collections import OrderedDict
 import re
 
-STATUS_INPUT = "Released, Closed"
+STATUS_INPUT = "'Released', 'Closed'"
 CYCLE_STATUSES = ["In Progress", "In Review", "Ready for Testing", "In Testing"]
 WORKFLOW_STATUSES = [
     "To Do", "In Progress", "Paused", "In Review", "Ready for Testing",
     "In Testing", "QA Complete", "In UAT", "In UAT Testing",
     "Ready for Release", "Released", "Closed"
 ]
+
+DETAILED_DURATIONS_DATA = OrderedDict([
+    ("Current Sprint", "1"),
+    ("Year to Date", "startOfYear()"),
+    ("Current Month", "startOfMonth()"),
+    ("Last Month", "startOfMonth(-1)"),
+    ("Last 2 Months", "startOfMonth(-2)"),
+    ("Custom Date Range", "customDateRange()")
+])
 
 if 'selected_custom_start_date' not in st.session_state: st.session_state.selected_custom_start_date = None
 if 'selected_custom_end_date' not in st.session_state: st.session_state.selected_custom_end_date = None
@@ -78,53 +85,54 @@ def show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log
 
     return sprint_name, sprint_start_date, sprint_end_date
 
-def prepare_summary_jql_query(team_id, team_name, selected_summary_duration_name, log_list):
-    jql_query = ""
+# def prepare_summary_jql_query(team_id, team_name, selected_summary_duration_name, log_list):
+#     jql_query = ""
 
-    if selected_summary_duration_name == "Current Sprint":
-        jql_query = f"'Team[Team]' IN (\"{team_id}\") AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY"
+#     if selected_summary_duration_name == "Current Sprint":
+#         jql_query = f"'Team[Team]' IN (\"{team_id}\") AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY"
 
-    else:
-        sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
-        jql_query = f"'Team[Team]' IN (\"{team_id}\") AND sprint = \"{team_name} {sprint_name}\" AND issuetype NOT IN (Sub-task) ORDER BY KEY"
+#     else:
+#         sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
+#         jql_query = f"'Team[Team]' IN (\"{team_id}\") AND sprint = \"{team_name} {sprint_name}\" AND issuetype NOT IN (Sub-task) ORDER BY KEY"
 
-    if not jql_query:
-        append_log(log_list, "error", "Failed to generate JQL query. Please check your selections.")
-        st.stop()
+#     if not jql_query:
+#         append_log(log_list, "error", "Failed to generate JQL query. Please check your selections.")
+#         st.stop()
 
-    append_log(log_list, "info", f"Generated JQL Query: {jql_query}")
+#     append_log(log_list, "info", f"Generated JQL Query: {jql_query}")
 
-    return jql_query
+#     return jql_query
 
-def prepare_detailed_jql_query(selected_team_id, selected_detailed_duration_name, selected_detailed_duration_func, log_list, selected_detailed_custom_start_date, selected_detailed_custom_end_date):
-
+def prepare_detailed_jql_query(selected_team_id, selected_detailed_duration_name, log_list):
     jql_query = ""
 
     if selected_detailed_duration_name == "Current Sprint":
         jql_query = f"'Team[Team]' = \"{selected_team_id}\" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY"
-
     else:
-        if selected_detailed_duration_func == "customDateRange()":
-            start_date = selected_detailed_custom_start_date
-            end_date = selected_detailed_custom_end_date
-            if not start_date or not end_date:
-                append_log(log_list, "error", "Please select both Start Date and End Date for custom range.")
-                st.stop()
-            if start_date > end_date:
-                append_log(log_list, "error", "ERROR Start Date cannot be after End Date.")
-                st.stop()
+        # For all other durations, include status filter
+        duration_func = DETAILED_DURATIONS_DATA.get(selected_detailed_duration_name, "")
+        print(f"duration_func: {duration_func}")
+        
+        if duration_func == "customDateRange()":
+            # Custom date range handling using session state dates
+            start_date = st.session_state.selected_custom_start_date
+            end_date = st.session_state.selected_custom_end_date
             
-            start_date_str = start_date.strftime("%Y-%m-%d")
-            end_date_str = end_date.strftime("%Y-%m-%d")
-            jql_query = (
-                f"'Team[Team]' = \"{selected_team_id}\" AND issuetype NOT IN (Sub-task) "
-                f"AND created >= \"{start_date_str}\" AND created <= \"{end_date_str}\" "
-                f"AND status IN ({STATUS_INPUT}) ORDER BY KEY"
-            )
+            if start_date and end_date:
+                start_date_str = start_date.strftime("%Y-%m-%d")
+                end_date_str = end_date.strftime("%Y-%m-%d")
+                jql_query = (
+                    f"'Team[Team]' = \"{selected_team_id}\" AND issuetype NOT IN (Sub-task) "
+                    f"AND created >= '{start_date_str}' AND created <= '{end_date_str}' "
+                    f"AND status IN ({STATUS_INPUT}) ORDER BY KEY"
+                )
+            else:
+                append_log(log_list, "error", "Custom date range selected but start or end date is missing.")
+                st.stop()
         else:
             jql_query = (
                 f"'Team[Team]' = \"{selected_team_id}\" AND issuetype NOT IN (Sub-task) "
-                f"AND created > {selected_detailed_duration_func} AND status IN ({STATUS_INPUT}) ORDER BY KEY"
+                f"AND created > {duration_func} AND status IN ({STATUS_INPUT}) ORDER BY KEY"
             )
 
     if not jql_query:
@@ -148,7 +156,7 @@ def connect_to_jira_streamlit(url, username, api_token, log_list):
 # --- Data Fetching Functions (adapted for Streamlit caching and inputs) ---
 @st.cache_data
 def get_available_projects_streamlit(jira_url, jira_username, jira_api_token, log_list):
-    jira_instance = connect_to_jira_streamlit(jira_url, jira_username, jira_api_token)
+    jira_instance = connect_to_jira_streamlit(jira_url, jira_username, jira_api_token, log_list)
     if not jira_instance: return []
     try:
         projects = jira_instance.projects()
@@ -177,7 +185,7 @@ def get_all_jira_users_streamlit(jira_url, jira_username, jira_api_token, log_li
         users_page = fetch_users_page(jira_instance, start_at, max_results, log_list)
         if not users_page:
             break
-        process_users_page(users_page, all_users, filter_domain, log_list)
+        process_users_page(users_page, all_users, filter_domain)
         start_at += max_results
         if len(users_page) < max_results:
             break
@@ -234,25 +242,25 @@ def get_filter_status_message(filter_domain):
 
 @st.cache_data
 def get_custom_field_options_streamlit(jira_url, jira_username, jira_api_token, field_id, project_key, log_list, issue_type_name="Story"):
-    jira_instance = connect_to_jira_streamlit(jira_url, jira_username, jira_api_token)
+    jira_instance = connect_to_jira_streamlit(jira_url, jira_username, jira_api_token, log_list)
     if not jira_instance:
-        append_log(log_list, "warn", "JIRA custom filed", "Jira instance not available to fetch custom field options.")
+        append_log(log_list, "warn", "JIRA custom filed - Jira instance not available to fetch custom field options.")
         return []
 
     if not field_id:
         append_log(log_list, "warn", "Custom filed - Cannot fetch options: No field ID provided.")
         return []
 
-    field_name, is_standard_select_list = get_field_info(jira_instance, field_id)
+    field_name, is_standard_select_list = get_field_info(jira_instance, field_id, log_list)
     if not field_name:
         return []
 
     if is_standard_select_list:
-        options = fetch_options_from_createmeta(jira_instance, field_id, project_key, issue_type_name, field_name)
+        options = fetch_options_from_createmeta(jira_instance, field_id, project_key, issue_type_name, field_name, log_list)
         if options:
             return options
 
-    return fetch_options_from_jql(jira_instance, field_id, project_key, field_name)
+    return fetch_options_from_jql(jira_instance, field_id, project_key, field_name, log_list)
 
 
 def get_field_info(jira_instance, field_id, log_list):
@@ -358,40 +366,6 @@ def get_issues_by_jql(jql, jira_url, username, api_token, log_list):
 
     return issue_keys
 
-def get_summary_issues_by_jql(jql, jira_url, username, api_token, log_list):
-    auth = HTTPBasicAuth(username, api_token)
-    if not jql.strip():
-        append_log(log_list, "error", "ERROR JQL query cannot be empty.")
-        st.stop()
-    issues = []
-    start_at = 0
-    max_results = 50
-    while True:
-        url = f"{jira_url}/rest/api/3/search"
-        params = {
-            "jql": jql,
-            "maxResults": 100, 
-            "fields": "key,summary,issuetype,assignee,created,comment,customfield_10014,status,customfield_10000,customfield_10001,customfield_10010", 
-            "expand": "changelog" 
-        }
-        try:
-            response = requests.get(url, auth=auth, params=params)
-            response.raise_for_status()
-            data = response.json()
-            issues = data.get("issues", [])
-            # issue_keys.extend(issue['key'] for issue in issues)
-            if len(issues) < max_results:
-                break
-            start_at += max_results
-        except requests.exceptions.RequestException as e:
-            append_log(log_list, "error", f"Network or API error during JQL search: {e}")
-            st.stop()
-        except Exception as e:
-            append_log(log_list, "error", f"An unexpected error occurred during JQL search: {e}")
-            st.stop()
-
-    return issues
-
 # === FORMAT DURATION ===
 # def format_duration(hours):
 #     if hours is None: return "N/A"
@@ -473,14 +447,14 @@ def seconds_to_hm(seconds_str):
     minutes = (seconds % 3600) // 60
     return f"{hours} hrs {minutes} mins"
 
-def seconds_to_hours(seconds_str):
-    try:
-        seconds = int(seconds_str)
-    except (ValueError, TypeError):
-        return ""
+# def seconds_to_hours(seconds_str):
+#     try:
+#         seconds = int(seconds_str)
+#     except (ValueError, TypeError):
+#         return ""
 
-    hours = round(seconds / 3600, 2)
-    return hours
+#     hours = round(seconds / 3600, 2)
+#     return hours
 
 def get_logged_time(histories):
     for history in histories:
@@ -599,29 +573,6 @@ if __name__ == "__main__":
     sprint_name, sprint_start_date, sprint_end_date = get_sprint_for_date(today_str)
     print(f"Today's sprint: {sprint_name} : sprint_start_date: {sprint_start_date} : sprint_end_date: {sprint_end_date}")
 
-# def get_previous_sprint_name(base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
-#     base_year, base_sprint_num = map(int, base_sprint.split("."))
-#     base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").date()
-#     today = datetime.today().date()
-
-#     days_elapsed = (today - base_start_date).days
-#     sprint_offset = days_elapsed // sprint_length_days
-
-#     current_sprint_num = base_sprint_num + sprint_offset
-#     current_year = base_year
-
-#     while current_sprint_num > 52:
-#         current_sprint_num -= 52
-#         current_year += 1
-
-#     previous_sprint_num = current_sprint_num - 1
-#     previous_year = current_year
-#     if previous_sprint_num <= 0:
-#         previous_sprint_num += 52
-#         previous_year -= 1
-
-#     return f"{previous_year}.{previous_sprint_num:02d}"
-
 def get_sprint_dates_from_name(sprint_name, base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
     base_year, base_sprint_num = map(int, base_sprint.split("."))
     target_year, target_sprint_num = map(int, sprint_name.split("."))
@@ -735,55 +686,12 @@ def seconds_to_hours(seconds):
 
 def prepare_summary_jql_query(team_id, team_name, selected_duration_name, log_list):
     if selected_duration_name == "Current Sprint":
-        jql = f'"Team[Team]" = "{team_id}" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+        jql = f'"Team" = "{team_id}" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY'
     elif selected_duration_name.startswith("Sprint "):
         sprint_name = selected_duration_name.replace("Sprint ", "")
-        jql = f'"Team[Team]" = "{team_id}" AND sprint = "{team_name} {sprint_name}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+        jql = f'"Team" = "{team_id}" AND sprint = "{team_name} {sprint_name}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
     else:
-        jql = f'"Team[Team]" = "{team_id}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
+        jql = f'"Team" = "{team_id}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
     
-    log_list.append(f"INFO Generated JQL for {team_name}: {jql}")
+    append_log(log_list, "info", f"Generated JQL for {team_name}: {jql}")
     return jql
-
-def prepare_detailed_jql_query(team_id, selected_duration_name, log_list):
-    if selected_duration_name == "Current Sprint":
-        jql = f'"Team[Team]" = "{team_id}" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY'
-    else:
-        jql = f'"Team[Team]" = "{team_id}" AND issuetype NOT IN (Sub-task) ORDER BY KEY'
-    
-    log_list.append(f"INFO Generated detailed JQL: {jql}")
-    return jql
-
-# def get_previous_n_sprints(n=5, base_sprint="2025.03", base_start_date_str="2025-02-05", sprint_length_days=14):
-#     base_year, base_sprint_num = map(int, base_sprint.split("."))
-#     base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").date()
-#     today = datetime.today().date()
-
-#     days_elapsed = (today - base_start_date).days
-#     if days_elapsed < 0:
-#         current_sprint_num = base_sprint_num
-#         current_year = base_year
-#     else:
-#         sprint_offset = days_elapsed // sprint_length_days
-#         current_sprint_num = base_sprint_num + sprint_offset
-#         current_year = base_year
-
-#         while current_sprint_num > 52:
-#             current_sprint_num -= 52
-#             current_year += 1
-
-#     sprints = []
-#     for i in range(n):
-#         sprint_num = current_sprint_num - i
-#         sprint_year = current_year
-        
-#         if sprint_num <= 0:
-#             sprint_num += 52
-#             sprint_year -= 1
-            
-#         sprints.append(f"{sprint_year}.{sprint_num:02d}")
-    
-#     return sprints
-
-# def show_sprint_name_start_date_and_end_date(sprint_name):
-#     return f"Sprint: {sprint_name}"

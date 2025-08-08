@@ -4,12 +4,12 @@ from collections import OrderedDict
 from datetime import datetime, date
 import numpy as np
 
-from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date
+from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date, DETAILED_DURATIONS_DATA
 from report_detailed import generate_detailed_report, generated_report_df_display
 from report_summary import generate_summary_report, generated_summary_report_df_display
 
 TEAMS_DATA = OrderedDict([
-    ("A Team", "34e068f6-978d-4ad9-a4ef-3bf5eec72f65"),
+    ("A-Team", "34e068f6-978d-4ad9-a4ef-3bf5eec72f65"),
     ("Avengers", "8d39d512-0220-4711-9ad0-f14fbf74a50e"),
     ("Jarvis", "1ec8443e-a42c-4613-bc88-513ee29203d0"),
     ("Mavrix", "1d8f251a-8fd9-4385-8f5f-6541c28bda19"),
@@ -21,16 +21,7 @@ SUMMARY_DURATIONS_DATA = OrderedDict([
     ("Current Sprint", "openSprints()")
 ])
 
-DETAILED_DURATIONS_DATA = OrderedDict([
-    ("Current Sprint", "1"),
-    ("Year to Date", "startOfYear()"),
-    ("Current Month", "startOfMonth()"),
-    ("Last Month", "startOfMonth(-1)"),
-    ("Last 2 Months", "startOfMonth(-2)"),
-    ("Last 3 Months", "startOfMonth(-3)"),
-    ("Last 6 Months", "startOfMonth(-6)"),
-    ("Custom Date Range", "customDateRange()")
-])
+
 
 # Set Streamlit page configuration
 st.set_page_config(
@@ -98,11 +89,9 @@ with st.sidebar:
         current_summary_duration_name_for_selector = st.session_state.selected_summary_duration_name
         current_summary_duration_idx = summary_duration_names.index(current_summary_duration_name_for_selector) if current_summary_duration_name_for_selector in summary_duration_names else 0
 
-        # print(f"current_summary_duration_name_for_selector : {current_summary_duration_name_for_selector}")
-
         def on_summary_duration_selector_change_callback():
             st.session_state.selected_summary_duration_name = st.session_state.summary_duration_selector_widget_key
-            print(f"st.session_state.selected_summary_duration_name : {st.session_state.selected_summary_duration_name}")
+            # print(f"st.session_state.selected_summary_duration_name : {st.session_state.selected_summary_duration_name}")
             st.session_state.selected_summary_duration_func = SUMMARY_DURATIONS_DATA.get(st.session_state.selected_summary_duration_name)
             # Clear data when selection changes
             st.session_state.summary_data = None
@@ -142,6 +131,7 @@ with st.sidebar:
             st.session_state.last_detailed_selection = None
             # Switch to detailed tab
             st.session_state.switch_to_tab = 1
+            add_log_message(st.session_state.log_messages, "info", f"Team changed to: {st.session_state.selected_team_name}, switching to tab 1")
 
         st.selectbox(
             "Select Team",
@@ -191,6 +181,7 @@ with st.sidebar:
 
         if st.button("Generate Detailed Report"):
             generate_detailed_button = True
+            # add_log_message(st.session_state.log_messages, "info", "Detailed report button clicked")
         else:
             generate_detailed_button = False
 
@@ -332,6 +323,7 @@ if generate_summary_button:
 
 if generate_detailed_button:
     st.session_state.switch_to_tab = 1
+    add_log_message(st.session_state.log_messages, "info", "Generate detailed button clicked, switching to tab 1")
     
     current_detailed_selection = (st.session_state.selected_team_id, st.session_state.selected_detailed_duration_name)
     
@@ -351,6 +343,8 @@ if generate_detailed_button:
             jql_query = prepare_detailed_jql_query(st.session_state.selected_team_id, 
                                                     st.session_state.selected_detailed_duration_name, 
                                                     st.session_state.log_messages)
+            
+            add_log_message(st.session_state.log_messages, "info", f"Detailed JQL Query: {jql_query}")
             
             with st.spinner("Fetching issues and generating detailed report..."):
                 detailed_report_df = generate_detailed_report(jira_conn_details, jql_query, st.session_state.selected_team_name, st.session_state.log_messages)

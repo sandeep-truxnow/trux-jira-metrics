@@ -124,6 +124,8 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         total_spillover_points = sum(issue['spillover_story_points'] for issue in all_metrics)
 
         percent_work_complete = round((total_issues_closed / total_issues) * 100, 2) if total_issues else 0
+        # calculate avg_sprints_per_issue
+
 
         return team_id, {
             "Total Issues": total_issues,
