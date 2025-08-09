@@ -8,6 +8,7 @@ import pandas as pd
 from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date, DETAILED_DURATIONS_DATA
 from report_detailed import generate_detailed_report, generated_report_df_display
 from report_summary import generate_summary_report, generated_summary_report_df_display
+from comparison_analysis import generate_team_comparison_data, display_comparison_analysis
 
 TEAMS_DATA = OrderedDict([
     ("A-Team", "34e068f6-978d-4ad9-a4ef-3bf5eec72f65"),
@@ -83,6 +84,8 @@ if 'last_detailed_selection' not in st.session_state: st.session_state.last_deta
 if 'switch_to_tab' not in st.session_state: st.session_state.switch_to_tab = None
 if 'auto_generate_summary' not in st.session_state: st.session_state.auto_generate_summary = False
 if 'auto_generate_detailed' not in st.session_state: st.session_state.auto_generate_detailed = False
+if 'comparison_data' not in st.session_state: st.session_state.comparison_data = None
+if 'show_comparison' not in st.session_state: st.session_state.show_comparison = False
 
 # --- Main Streamlit App Layout ---
 # --- Sidebar for Jira Credentials and General Report Options ---
@@ -96,7 +99,8 @@ with st.sidebar:
     
     with st.expander("Summary Report", expanded=True):
     # st.header("Summary Report")
-        previous_sprints = get_previous_n_sprints(3)
+        sprint_count = st.number_input("Previous Sprints to Include", min_value=1, max_value=10, value=3, step=1, help="Number of previous sprints to show in duration dropdown")
+        previous_sprints = get_previous_n_sprints(sprint_count)
         
         # Get current sprint to avoid duplication
         from common import get_sprint_for_date
@@ -135,10 +139,18 @@ with st.sidebar:
             if st.button("🔄 Refresh", help="Force refresh data (bypass cache)"):
                 st.cache_data.clear()
                 st.session_state.summary_data = None
+                st.session_state.comparison_data = None
                 st.session_state.last_summary_selection = None
                 generate_summary_button = True
             else:
                 pass
+        
+        # Add comparison toggle
+        st.session_state.show_comparison = st.checkbox(
+            "Show Team Comparison Analysis", 
+            value=st.session_state.show_comparison,
+            help="Compare teams across different durations"
+        )
 
     st.markdown("---")
 
@@ -263,8 +275,21 @@ with tab_summary:
             - **Avg Completion Days**: Average number of days from issue creation to completion
             - **Avg Sprints/Story**: Average number of sprints per story for completed issues
             """)
+        
+        # Display comparison analysis if enabled
+        if st.session_state.show_comparison and st.session_state.comparison_data:
+            st.markdown("---")
+            display_comparison_analysis(
+                st.session_state.comparison_data, 
+                TEAMS_DATA, 
+                st.session_state.selected_summary_duration_name
+            )
     else:
         st.info("Click 'Generate Summary Report' to view the summary data.")
+        
+        # Show comparison toggle even when no data
+        if st.session_state.show_comparison:
+            st.info("Enable comparison analysis by generating a summary report first.")
 
 with tab_detailed:
     if st.session_state.detailed_header is not None:
@@ -339,6 +364,19 @@ if generate_summary_button:
                 # Convert TEAMS_DATA to tuple for cache key stability
                 teams_data_tuple = tuple(TEAMS_DATA.items())
                 team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple)
+                
+                # Generate comparison data if requested
+                if st.session_state.show_comparison and st.session_state.comparison_data is None:
+                    with st.spinner("Generating comparison data across all durations..."):
+                        all_durations = list(SUMMARY_DURATIONS_DATA.keys())
+                        
+                        @st.cache_data(ttl=300)
+                        def cached_comparison_data(conn_details, teams_tuple, durations_tuple):
+                            return generate_team_comparison_data(conn_details, dict(teams_tuple), list(durations_tuple), [])
+                        
+                        st.session_state.comparison_data = cached_comparison_data(
+                            jira_conn_details, tuple(TEAMS_DATA.items()), tuple(all_durations)
+                        )
 
                 if team_metrics is not None:
                     df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)
