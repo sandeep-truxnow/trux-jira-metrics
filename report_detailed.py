@@ -45,7 +45,7 @@ def collect_metrics_streamlit(issue_keys, jira_url, username, api_token, log_lis
         except Exception as e:
             append_log(log_list, "error", f"Error processing issue {key}: {e}")
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         list(executor.map(process_issue, issue_keys))
     return all_metrics
 
@@ -215,7 +215,7 @@ def generate_detailed_report(jira_conn_details, jql_query, selected_team_name, l
             auth_username, 
             auth_api_token, 
             selected_team_name,
-            st.session_state.log_messages
+            log_list
         )
         append_log(log_list, "info", "Report generated!")
 

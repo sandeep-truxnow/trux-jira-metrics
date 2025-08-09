@@ -80,27 +80,10 @@ def show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log
         if sprint_name:
             sprint_start_date, sprint_end_date = get_sprint_dates_from_name(sprint_name)
 
-    append_log(log_list, "info", f"Selected Sprint Name: {sprint_name}, sprint_start_date: {sprint_start_date}, sprint_end_date: {sprint_end_date}")
+    # append_log(log_list, "info", f"Selected Sprint Name: {sprint_name}, sprint_start_date: {sprint_start_date}, sprint_end_date: {sprint_end_date}")
 
     return sprint_name, sprint_start_date, sprint_end_date
 
-# def prepare_summary_jql_query(team_id, team_name, selected_summary_duration_name, log_list):
-#     jql_query = ""
-
-#     if selected_summary_duration_name == "Current Sprint":
-#         jql_query = f"'Team[Team]' IN (\"{team_id}\") AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY"
-
-#     else:
-#         sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
-#         jql_query = f"'Team[Team]' IN (\"{team_id}\") AND sprint = \"{team_name} {sprint_name}\" AND issuetype NOT IN (Sub-task) ORDER BY KEY"
-
-#     if not jql_query:
-#         append_log(log_list, "error", "Failed to generate JQL query. Please check your selections.")
-#         st.stop()
-
-#     append_log(log_list, "info", f"Generated JQL Query: {jql_query}")
-
-#     return jql_query
 
 def prepare_detailed_jql_query(selected_team_id, selected_detailed_duration_name, log_list):
     jql_query = ""
@@ -460,32 +443,6 @@ def get_logged_time(histories):
             if item.get('field') == 'timespent':
                 return int(item['to'])
     return 0
-
-# def get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date):
-#     total_logged_seconds = 0
-
-#     # Handle both date objects and strings
-#     if isinstance(sprint_start_date, date):
-#         start_dt = datetime.combine(sprint_start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-#     else:
-#         start_dt = datetime.strptime(sprint_start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    
-#     if isinstance(sprint_end_date, date):
-#         end_dt = datetime.combine(sprint_end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-#     else:
-#         end_dt = datetime.strptime(sprint_end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-
-#     for history in histories:
-#         created_dt = datetime.strptime(history["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
-
-#         if start_dt <= created_dt <= end_dt:
-#             for item in history.get("items", []):
-#                 if item.get("field") == "timespent":
-#                     from_val = int(item.get("from") or 0)
-#                     to_val = int(item.get("to") or 0)
-#                     total_logged_seconds += max(0, to_val - from_val)
-
-#     return total_logged_seconds
 
 
 def parse_date(dt):

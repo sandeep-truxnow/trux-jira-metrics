@@ -55,7 +55,8 @@ def add_log_message(log_list, level, message):
         st.warning(f"[{timestamp}] {message}")
 
 # --- Initialize ALL Streamlit session state variables at the TOP LEVEL ---
-if 'log_messages' not in st.session_state: st.session_state.log_messages = []
+if 'summary_log_messages' not in st.session_state: st.session_state.summary_log_messages = []
+if 'detailed_log_messages' not in st.session_state: st.session_state.detailed_log_messages = []
 if 'jira_conn_details' not in st.session_state: st.session_state.jira_conn_details = None
 
 if 'team_options_display' not in st.session_state: st.session_state.team_options_display = list(TEAMS_DATA.keys())
@@ -162,7 +163,7 @@ with st.sidebar:
             st.session_state.last_detailed_selection = None
             # Switch to detailed tab
             st.session_state.switch_to_tab = 1
-            add_log_message(st.session_state.log_messages, "info", f"Team changed to: {st.session_state.selected_team_name}, switching to tab 1")
+            add_log_message(st.session_state.detailed_log_messages, "info", f"Team changed to: {st.session_state.selected_team_name}, switching to tab 1")
 
         st.selectbox(
             "Select Team",
@@ -215,11 +216,20 @@ with st.sidebar:
             st.session_state.selected_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_input", on_change=on_date_change)
             st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_input", on_change=on_date_change)
 
-        if st.button("Generate Detailed Report"):
-            generate_detailed_button = True
-            # add_log_message(st.session_state.log_messages, "info", "Detailed report button clicked")
-        else:
-            generate_detailed_button = False
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            if st.button("Generate Detailed Report"):
+                generate_detailed_button = True
+            else:
+                generate_detailed_button = False
+        with col2:
+            if st.button("🔄 Refresh", help="Force refresh data (bypass cache)", key="detailed_refresh"):
+                st.cache_data.clear()
+                st.session_state.detailed_data = None
+                st.session_state.last_detailed_selection = None
+                generate_detailed_button = True
+            else:
+                pass
 
 
 
@@ -292,7 +302,7 @@ with tab_detailed:
         # st.markdown("---")
         
         from report_detailed import generated_report_df_display
-        generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.log_messages)
+        generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.detailed_log_messages)
     else:
         st.info("Click 'Generate Detailed Report' to view the detailed data.")
 
@@ -306,14 +316,14 @@ if generate_summary_button:
     # Check if selection changed or no data exists
     if (st.session_state.last_summary_selection == current_selection and 
         st.session_state.summary_data is not None):
-        add_log_message(st.session_state.log_messages, "info", "Using cached summary data - no selection change detected.")
+        add_log_message(st.session_state.summary_log_messages, "info", "Using cached summary data - no selection change detected.")
     else:
-        st.session_state.log_messages = [] 
+        st.session_state.summary_log_messages = [] 
         start_time = datetime.now()
-        add_log_message(st.session_state.log_messages, "info", "Generating summary report...")
+        add_log_message(st.session_state.summary_log_messages, "info", "Generating summary report...")
         st.session_state.last_summary_selection = current_selection
 
-        sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(st.session_state.selected_summary_duration_name, st.session_state.log_messages)
+        sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(st.session_state.selected_summary_duration_name, st.session_state.summary_log_messages)
 
         # Create header HTML to store in session state
         if st.session_state.selected_summary_duration_name == "Current Sprint":
@@ -334,14 +344,14 @@ if generate_summary_button:
         st.session_state.summary_header = header_html
         all_teams = ("\", \"".join(map(str, list(TEAMS_DATA.values()))))
 
-        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.log_messages)
+        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.summary_log_messages)
     
         if jira_conn_details is not None:
             with st.spinner("Fetching issues and generating summary report..."):
                 # Use caching for summary report
                 @st.cache_data(ttl=300)  # Cache for 5 minutes
                 def cached_summary_report(teams_list, conn_details, duration_name):
-                    return generate_summary_report(teams_list, conn_details, duration_name, TEAMS_DATA, st.session_state.log_messages)
+                    return generate_summary_report(teams_list, conn_details, duration_name, TEAMS_DATA, st.session_state.summary_log_messages)
                 
                 team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name)
 
@@ -395,64 +405,83 @@ if generate_summary_button:
 
                     # Store summary data in session state
                     st.session_state.summary_data = styled_summary_df
-                    add_log_message(st.session_state.log_messages, "info", f"Summary data stored with {len(df_jira_metrics)} rows")
+                    end_time = datetime.now()
+                    processing_time = end_time - start_time
+                    add_log_message(st.session_state.summary_log_messages, "info", f"Summary data stored with {len(df_jira_metrics)} rows")
+                    add_log_message(st.session_state.summary_log_messages, "info", f"Total processing time: {processing_time}")
                     st.rerun()
 
                 else:
-                    add_log_message(st.session_state.log_messages, "error", "Failed to generate detailed report.")
-                    
-                    end_time = datetime.now()
-                    add_log_message(st.session_state.log_messages, "info", f"Success: Data fetching complete! Duration: {end_time - start_time}")
+                    add_log_message(st.session_state.summary_log_messages, "error", "Failed to generate summary report.")
         else:
-            add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
+            add_log_message(st.session_state.summary_log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
 
 if generate_detailed_button:
-    add_log_message(st.session_state.log_messages, "info", "Generate detailed button clicked, switching to detailed tab")
+    add_log_message(st.session_state.detailed_log_messages, "info", "Generate detailed button clicked, switching to detailed tab")
     
     current_detailed_selection = (st.session_state.selected_team_id, st.session_state.selected_detailed_duration_name)
     
     # Check if selection changed or no data exists
     if (st.session_state.last_detailed_selection == current_detailed_selection and 
         st.session_state.detailed_data is not None):
-        add_log_message(st.session_state.log_messages, "info", "Using cached detailed data - no selection change detected.")
+        add_log_message(st.session_state.detailed_log_messages, "info", "Using cached detailed data - no selection change detected.")
     else:
-        st.session_state.log_messages = []
+        st.session_state.detailed_log_messages = []
         start_time = datetime.now()
         st.session_state.last_detailed_selection = current_detailed_selection
 
-        add_log_message(st.session_state.log_messages, "info", "Generating detailed report...")
-        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.log_messages)
+        add_log_message(st.session_state.detailed_log_messages, "info", "Generating detailed report...")
+        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.detailed_log_messages)
     
         if jira_conn_details is not None:
             jql_query = prepare_detailed_jql_query(st.session_state.selected_team_id, 
                                                     st.session_state.selected_detailed_duration_name, 
-                                                    st.session_state.log_messages)
+                                                    st.session_state.detailed_log_messages)
             
-            add_log_message(st.session_state.log_messages, "info", f"Detailed JQL Query: {jql_query}")
+            add_log_message(st.session_state.detailed_log_messages, "info", f"Detailed JQL Query: {jql_query}")
             
             with st.spinner("Fetching issues and generating detailed report..."):
-                detailed_report_df = generate_detailed_report(jira_conn_details, jql_query, st.session_state.selected_team_name, st.session_state.log_messages)
+                # Use caching for detailed report
+                @st.cache_data(ttl=300)  # Cache for 5 minutes
+                def cached_detailed_report(conn_details, query, team_name):
+                    return generate_detailed_report(conn_details, query, team_name, st.session_state.detailed_log_messages)
+                
+                detailed_report_df = cached_detailed_report(jira_conn_details, jql_query, st.session_state.selected_team_name)
                 
                 if detailed_report_df is not None:
                     st.session_state.detailed_data = detailed_report_df
-                    add_log_message(st.session_state.log_messages, "info", "Detailed report generated successfully!")
+                    end_time = datetime.now()
+                    processing_time = end_time - start_time
+                    add_log_message(st.session_state.detailed_log_messages, "info", "Detailed report generated successfully!")
+                    add_log_message(st.session_state.detailed_log_messages, "info", f"Total processing time: {processing_time}")
                     st.rerun()
                 else:
-                    add_log_message(st.session_state.log_messages, "error", "Failed to generate detailed report.")
-                    
-                end_time = datetime.now()
-                add_log_message(st.session_state.log_messages, "info", f"Success: Data fetching complete! Duration: {end_time - start_time}")
+                    add_log_message(st.session_state.detailed_log_messages, "error", "Failed to generate detailed report.")
         else:
-            add_log_message(st.session_state.log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
+            add_log_message(st.session_state.detailed_log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
 
 
-# Refresh logs in the top placeholder
+# Refresh logs in the top placeholder with separate sections
 with logs_placeholder.expander("View Processing Logs", expanded=False):
-    if st.session_state.log_messages:
-        for log_msg in st.session_state.log_messages:
-            st.code(log_msg, language="text")
-    else:
-        st.info("No logs generated yet. Click 'Generate Summary Report' or 'Generate Detailed Report' to see activity.")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        summary_title = f"**Summary Report Logs - {st.session_state.selected_summary_duration_name}**"
+        st.markdown(summary_title)
+        if st.session_state.summary_log_messages:
+            for log_msg in st.session_state.summary_log_messages:
+                st.code(log_msg, language="text")
+        else:
+            st.info("No summary logs yet.")
+    
+    with col2:
+        detailed_title = f"**Detailed Report Logs - {st.session_state.selected_team_name} - {st.session_state.selected_detailed_duration_name}**"
+        st.markdown(detailed_title)
+        if st.session_state.detailed_log_messages:
+            for log_msg in st.session_state.detailed_log_messages:
+                st.code(log_msg, language="text")
+        else:
+            st.info("No detailed logs yet.")
 
 # Simple tab switching at the end
 if generate_summary_button or generate_detailed_button:
