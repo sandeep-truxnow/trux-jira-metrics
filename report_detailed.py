@@ -292,7 +292,7 @@ def apply_story_points_gradient(styled_df, story_points_column):
 
 
 def display_dataframe(styled_df):
-    st.dataframe(styled_df, use_container_width=True, column_config={
+    st.dataframe(styled_df, use_container_width=True, hide_index=True, column_config={
         "Key": st.column_config.Column("Key", width="small", help="Jira Issue Key"),
         "Type": st.column_config.Column("Type", width="small", help="Jira Issue Type")
     })

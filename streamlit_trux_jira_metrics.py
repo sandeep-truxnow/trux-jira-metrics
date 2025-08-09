@@ -77,6 +77,7 @@ if 'active_tab' not in st.session_state: st.session_state.active_tab = 0
 if 'summary_data' not in st.session_state: st.session_state.summary_data = None
 if 'detailed_data' not in st.session_state: st.session_state.detailed_data = None
 if 'summary_header' not in st.session_state: st.session_state.summary_header = None
+if 'detailed_header' not in st.session_state: st.session_state.detailed_header = None
 if 'last_summary_selection' not in st.session_state: st.session_state.last_summary_selection = None
 if 'last_detailed_selection' not in st.session_state: st.session_state.last_detailed_selection = None
 if 'switch_to_tab' not in st.session_state: st.session_state.switch_to_tab = None
@@ -160,6 +161,7 @@ with st.sidebar:
             st.session_state.selected_team_id = TEAMS_DATA.get(st.session_state.selected_team_name)
             # Clear only detailed data when team selection changes
             st.session_state.detailed_data = None
+            st.session_state.detailed_header = None
             st.session_state.last_detailed_selection = None
             # Switch to detailed tab
             st.session_state.switch_to_tab = 1
@@ -191,6 +193,7 @@ with st.sidebar:
             st.session_state.selected_detailed_duration_func = DETAILED_DURATIONS_DATA.get(st.session_state.selected_detailed_duration_name)
             # Clear data when selection changes
             st.session_state.detailed_data = None
+            st.session_state.detailed_header = None
             st.session_state.last_detailed_selection = None
             # Switch to detailed tab
             st.session_state.switch_to_tab = 1
@@ -210,6 +213,7 @@ with st.sidebar:
             
             def on_date_change():
                 st.session_state.detailed_data = None
+                st.session_state.detailed_header = None
                 st.session_state.last_detailed_selection = None
                 st.session_state.switch_to_tab = 1
             
@@ -226,6 +230,7 @@ with st.sidebar:
             if st.button("🔄 Refresh", help="Force refresh data (bypass cache)", key="detailed_refresh"):
                 st.cache_data.clear()
                 st.session_state.detailed_data = None
+                st.session_state.detailed_header = None
                 st.session_state.last_detailed_selection = None
                 generate_detailed_button = True
             else:
@@ -283,23 +288,20 @@ with tab_summary:
         st.info("Click 'Generate Summary Report' to view the summary data.")
 
 with tab_detailed:
-    common_message = "This report is filtered and excludes sub-tasks"
-    status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'QA Complete', 'Released', or 'Closed'."
-
+    if st.session_state.detailed_header is not None:
+        st.markdown(st.session_state.detailed_header, unsafe_allow_html=True)
+    
     if st.session_state.detailed_data is not None:
-        # Show human-readable description
+        common_message = "This report is filtered and excludes sub-tasks"
+        status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'QA Complete', 'Released', or 'Closed'."
+        
+        # Show info message
         if st.session_state.selected_detailed_duration_name == "Current Sprint":
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team in the current active sprint"
             st.info(f"ℹ️ {common_message}.")
         elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team from {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}"
             st.info(f"ℹ️ {status_message}.")
         else:
-            description = f"Showing all issues assigned to **{st.session_state.selected_team_name}** team for {st.session_state.selected_detailed_duration_name}"
             st.info(f"ℹ️ {status_message}.")
-        
-        st.markdown(description)
-        # st.markdown("---")
         
         from report_detailed import generated_report_df_display
         generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.detailed_log_messages)
@@ -430,6 +432,25 @@ if generate_detailed_button:
         start_time = datetime.now()
         st.session_state.last_detailed_selection = current_detailed_selection
 
+        # Create detailed header HTML
+        if st.session_state.selected_detailed_duration_name == "Current Sprint":
+            header_title = f"Detailed Report - {st.session_state.selected_team_name} - Current Sprint"
+        elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
+            header_title = f"Detailed Report - {st.session_state.selected_team_name} - {st.session_state.selected_custom_start_date} to {st.session_state.selected_custom_end_date}"
+        else:
+            header_title = f"Detailed Report - {st.session_state.selected_team_name} - {st.session_state.selected_detailed_duration_name}"
+        
+        detailed_header_html = f"""
+        <h3>{header_title}</h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+            <div><strong>Today:</strong> {date.today().strftime('%d-%b-%Y')}</div>
+            <div><strong>Team:</strong> {st.session_state.selected_team_name}</div>
+            <div><strong>Duration:</strong> {st.session_state.selected_detailed_duration_name}</div>
+        </div>
+        <hr>
+        """
+        
+        st.session_state.detailed_header = detailed_header_html
         add_log_message(st.session_state.detailed_log_messages, "info", "Generating detailed report...")
         jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.detailed_log_messages)
     
