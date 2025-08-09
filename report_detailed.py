@@ -8,9 +8,24 @@ from datetime import datetime
 
 from common import get_current_and_previous_sprints, format_duration, duration_to_hours, WORKFLOW_STATUSES, get_issue_changelog, calculate_state_durations, get_issues_by_jql, count_transitions, get_logged_time, seconds_to_hm
 
+# === DETAILED COLUMN CONSTANTS ===
+DETAILED_COLUMNS = {
+    'KEY': 'Key',
+    'TYPE': 'Type',
+    'SUMMARY': 'Summary',
+    'ASSIGNEE': 'Assignee',
+    'STATUS': 'Status',
+    'STORY_POINTS': 'Story Points',
+    'SPRINTS': 'Sprints',
+    'FAILED_QA_COUNT': 'Failed QA Count',
+    'LOGGED_TIME': 'Logged Time',
+    'CYCLE_TIME': 'Cycle Time',
+    'LEAD_TIME': 'Lead Time'
+}
+
 # === GENERATE HEADERS ===
 def generate_headers():
-    return ["Key", "Type", "Summary", "Assignee", "Status", "Story Points", "Sprints", "Failed QA Count", "Logged Time", "Cycle Time", "Lead Time"] + WORKFLOW_STATUSES
+    return list(DETAILED_COLUMNS.values()) + WORKFLOW_STATUSES
 
 
 # --- Custom Field IDs ---
@@ -70,8 +85,8 @@ def create_row(meta, metrics, selected_team_name):
     durations = metrics['durations_by_status_hours']
     row = {
         **meta,
-        "Cycle Time": format_duration(metrics['cycle_time_hours']),
-        "Lead Time": format_duration(metrics['lead_time_hours']),
+        DETAILED_COLUMNS['CYCLE_TIME']: format_duration(metrics['cycle_time_hours']),
+        DETAILED_COLUMNS['LEAD_TIME']: format_duration(metrics['lead_time_hours']),
     }
     
     # --- Embed diamond differentiators in Sprints column in DataFrame ---
@@ -360,15 +375,15 @@ def extract_issue_meta(key, issue_data, log_list):
     logged_time_in_seconds = get_logged_time(issue_data['changelog']['histories'])
 
     return {
-        "Key": key,
-        "Type": fields['issuetype']['name'],
-        "Summary": fields['summary'],
-        "Assignee": fields['assignee']['displayName'] if fields['assignee'] else "Unassigned",
-        "Status": fields['status']['name'],
-        "Story Points": story_points_value,
-        "Sprints": sprint_str,
-        "Failed QA Count": failed_qa_count,
-        "Logged Time": seconds_to_hm(logged_time_in_seconds),
+        DETAILED_COLUMNS['KEY']: key,
+        DETAILED_COLUMNS['TYPE']: fields['issuetype']['name'],
+        DETAILED_COLUMNS['SUMMARY']: fields['summary'],
+        DETAILED_COLUMNS['ASSIGNEE']: fields['assignee']['displayName'] if fields['assignee'] else "Unassigned",
+        DETAILED_COLUMNS['STATUS']: fields['status']['name'],
+        DETAILED_COLUMNS['STORY_POINTS']: story_points_value,
+        DETAILED_COLUMNS['SPRINTS']: sprint_str,
+        DETAILED_COLUMNS['FAILED_QA_COUNT']: failed_qa_count,
+        DETAILED_COLUMNS['LOGGED_TIME']: seconds_to_hm(logged_time_in_seconds),
     }
 
 def extract_sprint_string(fields):
