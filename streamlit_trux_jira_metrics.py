@@ -251,8 +251,8 @@ with tab_summary:
             use_container_width=True, 
             hide_index=True,
             column_config={
-                "% Complete": st.column_config.NumberColumn(
-                    "% Complete",
+                "Completion %": st.column_config.NumberColumn(
+                    "Completion %",
                     format="%.0f%%"
                 )
             }
@@ -323,6 +323,18 @@ if generate_summary_button:
     if (st.session_state.last_summary_selection == current_selection and 
         st.session_state.summary_data is not None):
         add_log_message(st.session_state.summary_log_messages, "info", "Using cached summary data - no selection change detected.")
+        # Still show comparison if enabled, using existing data
+        if st.session_state.show_comparison and st.session_state.comparison_data is None:
+            with st.spinner("Generating comparison data across all durations..."):
+                all_durations = list(SUMMARY_DURATIONS_DATA.keys())
+                
+                @st.cache_data(ttl=300)
+                def cached_comparison_data(conn_details, teams_tuple, durations_tuple):
+                    return generate_team_comparison_data(conn_details, dict(teams_tuple), list(durations_tuple), [])
+                
+                st.session_state.comparison_data = cached_comparison_data(
+                    jira_conn_details, tuple(TEAMS_DATA.items()), tuple(all_durations)
+                )
     else:
         st.session_state.summary_log_messages = [] 
         start_time = datetime.now()
@@ -365,7 +377,7 @@ if generate_summary_button:
                 teams_data_tuple = tuple(TEAMS_DATA.items())
                 team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple)
                 
-                # Generate comparison data if requested
+                # Generate comparison data if requested (only once)
                 if st.session_state.show_comparison and st.session_state.comparison_data is None:
                     with st.spinner("Generating comparison data across all durations..."):
                         all_durations = list(SUMMARY_DURATIONS_DATA.keys())

@@ -116,12 +116,13 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 comparison_df.append({
                     'Team': team_name,
                     'Completion %': f"{metrics.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0):.0f}%",
-                    'Story Points': metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0),
-                    'Sprint Hours': metrics.get(SUMMARY_COLUMNS['SPRINT_HOURS'], 0)
+                    'Story Points': int(round(metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0))),
+                    'Sprint Hours': int(round(metrics.get(SUMMARY_COLUMNS.get('SPRINT_HOURS', 'Sprint Hrs'), 0)))
                 })
             
             df = pd.DataFrame(comparison_df).sort_values('Team')
-            st.dataframe(df, hide_index=True, use_container_width=True)
+            styled_df = df.style.set_properties(subset=['Completion %'], **{'text-align': 'right'})
+            st.dataframe(styled_df, hide_index=True, use_container_width=True)
     
     with col2:
         st.markdown("**Completion % Across Durations**")
@@ -129,9 +130,11 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
         if completion_df is not None:
             if selected_duration in completion_df.columns:
                 styled_df = completion_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = styled_df.set_properties(subset=[col for col in completion_df.columns if '%' in str(completion_df[col].iloc[0]) if len(completion_df) > 0], **{'text-align': 'right'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
-                st.dataframe(completion_df, hide_index=True, use_container_width=True)
+                styled_df = completion_df.style.set_properties(subset=[col for col in completion_df.columns if '%' in str(completion_df[col].iloc[0]) if len(completion_df) > 0], **{'text-align': 'right'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
     
     # Detailed metric comparisons
     st.markdown("**Detailed Metric Comparisons**")
@@ -156,7 +159,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
     with tab2:
         sprint_hours_df = create_metric_comparison_table(
             comparison_data, teams_data, 
-            SUMMARY_COLUMNS['SPRINT_HOURS'], 'Sprint Hours'
+            SUMMARY_COLUMNS.get('SPRINT_HOURS', 'Sprint Hrs'), 'Sprint Hours'
         )
         if sprint_hours_df is not None:
             # Round sprint hours to whole numbers
