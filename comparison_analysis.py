@@ -34,6 +34,15 @@ def create_team_performance_comparison(comparison_data, teams_data):
     if not comparison_data:
         return None
     
+    # Order durations: Current Sprint first, then previous sprints in descending order
+    ordered_durations = []
+    if 'Current Sprint' in comparison_data:
+        ordered_durations.append('Current Sprint')
+    
+    sprint_durations = [d for d in comparison_data.keys() if d.startswith('Sprint ')]
+    sprint_durations.sort(key=lambda x: tuple(map(int, x.replace('Sprint ', '').split('.'))), reverse=True)
+    ordered_durations.extend(sprint_durations)
+    
     team_id_to_name = {v: k for k, v in teams_data.items()}
     comparison_rows = []
     
@@ -41,14 +50,15 @@ def create_team_performance_comparison(comparison_data, teams_data):
         team_name = team_id_to_name[team_id]
         row = [team_name]
         
-        for duration_name, metrics in comparison_data.items():
-            team_metric = metrics.get(team_id, {})
-            completion_pct = team_metric.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0)
-            row.append(f"{completion_pct:.0f}%")
+        for duration_name in ordered_durations:
+            if duration_name in comparison_data:
+                team_metric = comparison_data[duration_name].get(team_id, {})
+                completion_pct = team_metric.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0)
+                row.append(f"{completion_pct:.0f}%")
         
         comparison_rows.append(row)
     
-    columns = ['Team'] + list(comparison_data.keys())
+    columns = ['Team'] + ordered_durations
     return pd.DataFrame(comparison_rows, columns=columns)
 
 def create_metric_comparison_table(comparison_data, teams_data, metric_key, metric_name):
@@ -56,6 +66,15 @@ def create_metric_comparison_table(comparison_data, teams_data, metric_key, metr
     if not comparison_data:
         return None
     
+    # Order durations: Current Sprint first, then previous sprints in descending order
+    ordered_durations = []
+    if 'Current Sprint' in comparison_data:
+        ordered_durations.append('Current Sprint')
+    
+    sprint_durations = [d for d in comparison_data.keys() if d.startswith('Sprint ')]
+    sprint_durations.sort(key=lambda x: tuple(map(int, x.replace('Sprint ', '').split('.'))), reverse=True)
+    ordered_durations.extend(sprint_durations)
+    
     team_id_to_name = {v: k for k, v in teams_data.items()}
     comparison_rows = []
     
@@ -63,16 +82,16 @@ def create_metric_comparison_table(comparison_data, teams_data, metric_key, metr
         team_name = team_id_to_name[team_id]
         row = [team_name]
         
-        for duration_name, metrics in comparison_data.items():
-            team_metric = metrics.get(team_id, {})
-            value = team_metric.get(metric_key, 0)
-            row.append(value)
+        for duration_name in ordered_durations:
+            if duration_name in comparison_data:
+                team_metric = comparison_data[duration_name].get(team_id, {})
+                value = team_metric.get(metric_key, 0)
+                row.append(value)
         
         comparison_rows.append(row)
     
-    columns = ['Team'] + list(comparison_data.keys())
-    df = pd.DataFrame(comparison_rows, columns=columns)
-    return df
+    columns = ['Team'] + ordered_durations
+    return pd.DataFrame(comparison_rows, columns=columns)
 
 def display_comparison_analysis(comparison_data, teams_data, selected_duration):
     """Display comprehensive comparison analysis"""
@@ -108,7 +127,11 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
         st.markdown("**Completion % Across Durations**")
         completion_df = create_team_performance_comparison(comparison_data, teams_data)
         if completion_df is not None:
-            st.dataframe(completion_df, hide_index=True, use_container_width=True)
+            if selected_duration in completion_df.columns:
+                styled_df = completion_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(completion_df, hide_index=True, use_container_width=True)
     
     # Detailed metric comparisons
     st.markdown("**Detailed Metric Comparisons**")
@@ -121,7 +144,14 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
             SUMMARY_COLUMNS['STORY_POINTS'], 'Story Points'
         )
         if story_points_df is not None:
-            st.dataframe(story_points_df, hide_index=True, use_container_width=True)
+            # Convert story points to integers
+            for col in story_points_df.columns[1:]:
+                story_points_df[col] = story_points_df[col].round(0).astype(int)
+            if selected_duration in story_points_df.columns:
+                styled_df = story_points_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(story_points_df, hide_index=True, use_container_width=True)
     
     with tab2:
         sprint_hours_df = create_metric_comparison_table(
@@ -132,7 +162,11 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
             # Round sprint hours to whole numbers
             for col in sprint_hours_df.columns[1:]:
                 sprint_hours_df[col] = sprint_hours_df[col].round(0).astype(int)
-            st.dataframe(sprint_hours_df, hide_index=True, use_container_width=True)
+            if selected_duration in sprint_hours_df.columns:
+                styled_df = sprint_hours_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(sprint_hours_df, hide_index=True, use_container_width=True)
     
     with tab3:
         bugs_df = create_metric_comparison_table(
@@ -140,4 +174,8 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
             SUMMARY_COLUMNS['BUGS'], 'Bugs'
         )
         if bugs_df is not None:
-            st.dataframe(bugs_df, hide_index=True, use_container_width=True)
+            if selected_duration in bugs_df.columns:
+                styled_df = bugs_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(bugs_df, hide_index=True, use_container_width=True)
