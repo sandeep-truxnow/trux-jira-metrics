@@ -114,12 +114,7 @@ with st.sidebar:
 
         def on_summary_duration_selector_change_callback():
             st.session_state.selected_summary_duration_name = st.session_state.summary_duration_selector_widget_key
-            # print(f"st.session_state.selected_summary_duration_name : {st.session_state.selected_summary_duration_name}")
             st.session_state.selected_summary_duration_func = SUMMARY_DURATIONS_DATA.get(st.session_state.selected_summary_duration_name)
-            # Clear data when selection changes
-            st.session_state.summary_data = None
-            st.session_state.summary_header = None
-            st.session_state.last_summary_selection = None
 
         st.selectbox(
             "Select Duration",
@@ -159,13 +154,6 @@ with st.sidebar:
         def on_team_selector_change_callback():
             st.session_state.selected_team_name = st.session_state.team_selector_widget_key
             st.session_state.selected_team_id = TEAMS_DATA.get(st.session_state.selected_team_name)
-            # Clear only detailed data when team selection changes
-            st.session_state.detailed_data = None
-            st.session_state.detailed_header = None
-            st.session_state.last_detailed_selection = None
-            # Switch to detailed tab
-            st.session_state.switch_to_tab = 1
-            add_log_message(st.session_state.detailed_log_messages, "info", f"Team changed to: {st.session_state.selected_team_name}, switching to tab 1")
 
         st.selectbox(
             "Select Team",
@@ -177,7 +165,7 @@ with st.sidebar:
         )
 
         def on_threshold_change():
-            st.session_state.switch_to_tab = 1
+            pass
             
         cycle_time_threshold_days = st.number_input("Cycle Time Threshold (days)", min_value=1, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
         lead_time_threshold_days = st.number_input("Lead Time Threshold (days)", min_value=1, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
@@ -191,12 +179,6 @@ with st.sidebar:
         def on_detailed_duration_selector_change_callback():
             st.session_state.selected_detailed_duration_name = st.session_state.detailed_duration_selector_widget_key
             st.session_state.selected_detailed_duration_func = DETAILED_DURATIONS_DATA.get(st.session_state.selected_detailed_duration_name)
-            # Clear data when selection changes
-            st.session_state.detailed_data = None
-            st.session_state.detailed_header = None
-            st.session_state.last_detailed_selection = None
-            # Switch to detailed tab
-            st.session_state.switch_to_tab = 1
 
         st.selectbox(
             "Select Duration",
@@ -212,10 +194,7 @@ with st.sidebar:
             end_default = st.session_state.selected_detailed_custom_end_date if st.session_state.selected_detailed_custom_end_date else date.today()
             
             def on_date_change():
-                st.session_state.detailed_data = None
-                st.session_state.detailed_header = None
-                st.session_state.last_detailed_selection = None
-                st.session_state.switch_to_tab = 1
+                pass
             
             st.session_state.selected_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_input", on_change=on_date_change)
             st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_input", on_change=on_date_change)
