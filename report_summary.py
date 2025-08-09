@@ -16,14 +16,16 @@ SUMMARY_COLUMNS = {
     'STORY_POINTS': 'Story Points',
     'ISSUES_COMPLETED': 'Issues Completed',
     'PERCENT_COMPLETED': 'Completion %',
-    'HOURS_WORKED': 'Sprint Hrs',
-    'ALL_TIME': 'All Time Hrs',
+    'SPRINT_HOURS': 'Sprint Hrs',
+    'ALL_TIME_HOURS': 'All Time Hrs',
     'BUGS': 'Bugs',
     'FAILED_QA_COUNT': 'Failed QA Count',
     'SPILLOVER_ISSUES': 'Spillover Issues',
     'SPILLOVER_POINTS': 'Spillover Story Points',
     'AVG_COMPLETION_DAYS': 'Avg Completion Days',
-    'AVG_SPRINTS_STORY': 'Avg Sprints/Story'
+    'AVG_SPRINTS_STORY': 'Avg Sprints/Story',
+    'BUGS_SPRINT_HOURS': 'Bugs Sprint Hrs',
+    'BUGS_ALL_TIME_HOURS': 'Bugs All Time Hrs'
 }
 
 # === GENERATE HEADERS ===
@@ -79,12 +81,15 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         total_issues = len(all_metrics)
         total_story_points = sum(issue['story_points'] for issue in all_metrics)
         total_issues_closed = sum(issue['issues_closed'] for issue in all_metrics)
-        total_hours_worked = sum(issue['hours_worked'] for issue in all_metrics)
-        total_all_time = sum(issue['all_time'] for issue in all_metrics)
+        total_sprint_hours = sum(issue['sprint_hours'] for issue in all_metrics)
+        total_all_time_hours = sum(issue['all_time_hours'] for issue in all_metrics)
         total_failed_qa_count = sum(issue['failed_qa_count'] for issue in all_metrics)
         total_bugs = sum(issue['bug_count'] for issue in all_metrics)
         total_spillover_issues = sum(issue['spillover_issues'] for issue in all_metrics)
         total_spillover_points = sum(issue['spillover_story_points'] for issue in all_metrics)
+
+        bugs_hours_in_current_sprint = sum(issue['bugs_hours_in_current_sprint'] for issue in all_metrics)
+        total_all_time_bugs_hours = sum(issue['total_all_time_bugs_hours'] for issue in all_metrics)
 
         # Calculate average completion time for completed stories
         completed_stories = [issue for issue in all_metrics if issue['issues_closed'] > 0 and issue['completion_time_days'] > 0]
@@ -149,14 +154,16 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             SUMMARY_COLUMNS['STORY_POINTS']: total_story_points,
             SUMMARY_COLUMNS['ISSUES_COMPLETED']: total_issues_closed,
             SUMMARY_COLUMNS['PERCENT_COMPLETED']: percent_work_complete,
-            SUMMARY_COLUMNS['HOURS_WORKED']: seconds_to_hours(total_hours_worked),
-            SUMMARY_COLUMNS['ALL_TIME']: seconds_to_hours(total_all_time),
+            SUMMARY_COLUMNS['SPRINT_HOURS']: seconds_to_hours(total_sprint_hours),
+            SUMMARY_COLUMNS['ALL_TIME_HOURS']: seconds_to_hours(total_all_time_hours),
             SUMMARY_COLUMNS['BUGS']: total_bugs,
             SUMMARY_COLUMNS['FAILED_QA_COUNT']: total_failed_qa_count,
             SUMMARY_COLUMNS['SPILLOVER_ISSUES']: total_spillover_issues,
             SUMMARY_COLUMNS['SPILLOVER_POINTS']: total_spillover_points,
             SUMMARY_COLUMNS['AVG_COMPLETION_DAYS']: round(avg_completion_days, 1),
             SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story, 1),
+            SUMMARY_COLUMNS['BUGS_SPRINT_HOURS']: seconds_to_hours(bugs_hours_in_current_sprint),
+            SUMMARY_COLUMNS['BUGS_ALL_TIME_HOURS']: seconds_to_hours(total_all_time_bugs_hours)
         }
 
     # Run all teams in parallel
@@ -265,14 +272,16 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0),
             metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], 0),
             metrics.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0.0),
-            metrics.get(SUMMARY_COLUMNS['HOURS_WORKED'], 0.0),
-            metrics.get(SUMMARY_COLUMNS['ALL_TIME'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['SPRINT_HOURS'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['ALL_TIME_HOURS'], 0.0),
             metrics.get(SUMMARY_COLUMNS['BUGS'], 0),
             metrics.get(SUMMARY_COLUMNS['FAILED_QA_COUNT'], 0),
             metrics.get(SUMMARY_COLUMNS['SPILLOVER_ISSUES'], 0),
             metrics.get(SUMMARY_COLUMNS['SPILLOVER_POINTS'], 0),
             metrics.get(SUMMARY_COLUMNS['AVG_COMPLETION_DAYS'], 0.0),
             metrics.get(SUMMARY_COLUMNS['AVG_SPRINTS_STORY'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['BUGS_SPRINT_HOURS'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['BUGS_ALL_TIME_HOURS'], 0.0),
         ])
 
     df = pd.DataFrame(rows, columns=generate_headers())
@@ -295,17 +304,36 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     return df
     
 
+def _get_story_points(fields):
+    story_points = fields.get(CUSTOM_FIELD_STORY_POINTS_ID, None)
+    if story_points is None or (isinstance(story_points, float) and np.isnan(story_points)):
+        return 0
+    return story_points
+
+def _calculate_completion_time(histories, created_date, status):
+    if status.lower() not in ["done", "qa complete", "released", "closed"]:
+        return 0
+    
+    for history in histories:
+        for item in history['items']:
+            if item['field'] == 'status' and item['toString'].lower() in ['done', 'qa complete', 'released', 'closed']:
+                resolved_date = datetime.strptime(history['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
+                return (resolved_date - created_date).days
+    return 0
+
+def _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_date):
+    if issue_type.lower() != "bug":
+        return 0, 0, 0
+    
+    bug_count = 1
+    bugs_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
+    bugs_time_all = get_logged_time(histories)
+    return bug_count, bugs_time_sprint, bugs_time_all
+
 # === EXTRACT ISSUE META ===
 def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_list):
     key = issue.get("key", "")
-
     _, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
-
-    story_points = 0
-    issues_closed = 0
-    bug_count = 0
-    spillover_issues = 0
-    spillover_story_points = 0
 
     fields = issue_data['fields']
     if not fields:
@@ -313,65 +341,34 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, log_li
         return {}
     
     histories = issue_data['changelog']['histories']
-    sprints = fields.get("customfield_10010", [])  # Sprint field
+    sprints = fields.get("customfield_10010", [])
     issue_type = fields.get('issuetype', {}).get('name', '')
     status = fields.get('status', {}).get('name', '')
-
-    story_points = fields.get(CUSTOM_FIELD_STORY_POINTS_ID, None) # Default to None if not found
-    if story_points is None or (isinstance(story_points, float) and np.isnan(story_points)):
-        story_points = 0 # Display "N/A" for missing values
-
-    # Calculate sprint count for this issue
-    sprint_count = len(sprints) if isinstance(sprints, list) else 1
-    
-    if sprint_count > 1:
-        spillover_issues += 1
-        spillover_story_points += story_points or 0
-    
-    # Calculate completion time based on created date and resolution date
     created_date = datetime.strptime(issue_data['fields']['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
-    completion_time_days = 0
-    
-    # Check if issue is completed based on current status
-    if status.lower() in ["done", "qa complete", "released", "closed"]:
-        # Find resolution date from changelog
-        for history in histories:
-            for item in history['items']:
-                if item['field'] == 'status' and item['toString'].lower() in ['done', 'qa complete', 'released', 'closed']:
-                    resolved_date = datetime.strptime(history['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
-                    completion_time_days = (resolved_date - created_date).days
-                    break
-            if completion_time_days > 0:
-                break
 
-    # Count bugs
-    if issue_type.lower() == "bug":
-        bug_count += 1
+    story_points = _get_story_points(fields)
+    sprint_count = len(sprints) if isinstance(sprints, list) else 1
+    spillover_issues = 1 if sprint_count > 1 else 0
+    spillover_story_points = story_points if sprint_count > 1 else 0
+    completion_time_days = _calculate_completion_time(histories, created_date, status)
+    bug_count, bugs_time_sprint, bugs_time_all = _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_date)
+    issues_closed = 1 if status.lower() in ["done", "qa complete", "released", "closed"] else 0
+    failed_qa_count = count_transitions(histories, "In Testing", "Rejected") or 0
+    worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
+    total_all_time = get_logged_time(histories)
 
-    # Count completed issues
-    if status.lower() in ["done", "qa complete", "released", "closed"]:
-        issues_closed += 1
-
-    # failed QA count
-    failed_qa_count = count_transitions(histories, "In Testing", "Rejected")
-    if failed_qa_count is None:
-        failed_qa_count = 0  # Default to 0 if no transitions found
-
-    total_all_time_logged_time_in_seconds = get_logged_time(histories)
-
-    worked_in_current_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)    
-
-    # append_log(log_list, "info", f"Extracted issue meta for {key}: story_points={story_points}, issues_closed={issues_closed}, bug_count={bug_count}, Status={fields['status']['name']}, issues_more_than_1_sprint={issues_more_than_1_sprint}, story_points_more_than_1_sprint={story_points_more_than_1_sprint}")
     return {
         "key": key,
         "story_points": story_points, 
         "issues_closed": issues_closed,
-        "hours_worked": worked_in_current_sprint,   
-        "all_time": total_all_time_logged_time_in_seconds,
+        "sprint_hours": worked_time_sprint,   
+        "all_time_hours": total_all_time,
         "bug_count": bug_count,
         "failed_qa_count": failed_qa_count,
         "sprint_count": sprint_count,
         "completion_time_days": completion_time_days,
         "spillover_issues": spillover_issues,
         "spillover_story_points": spillover_story_points,
+        "bugs_hours_in_current_sprint": bugs_time_sprint,
+        "total_all_time_bugs_hours": bugs_time_all,
     }

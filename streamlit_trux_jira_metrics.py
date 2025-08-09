@@ -331,10 +331,14 @@ if generate_summary_button:
             with st.spinner("Fetching issues and generating summary report..."):
                 # Use caching for summary report
                 @st.cache_data(ttl=300)  # Cache for 5 minutes
-                def cached_summary_report(teams_list, conn_details, duration_name):
-                    return generate_summary_report(teams_list, conn_details, duration_name, TEAMS_DATA, st.session_state.summary_log_messages)
+                def cached_summary_report(teams_list, conn_details, duration_name, teams_data_tuple):
+                    # Create a fresh log list for the cached function
+                    cached_log_list = []
+                    return generate_summary_report(teams_list, conn_details, duration_name, dict(teams_data_tuple), cached_log_list)
                 
-                team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name)
+                # Convert TEAMS_DATA to tuple for cache key stability
+                teams_data_tuple = tuple(TEAMS_DATA.items())
+                team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple)
 
                 if team_metrics is not None:
                     df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)
@@ -444,7 +448,9 @@ if generate_detailed_button:
                 # Use caching for detailed report
                 @st.cache_data(ttl=300)  # Cache for 5 minutes
                 def cached_detailed_report(conn_details, query, team_name):
-                    return generate_detailed_report(conn_details, query, team_name, st.session_state.detailed_log_messages)
+                    # Create a fresh log list for the cached function
+                    cached_log_list = []
+                    return generate_detailed_report(conn_details, query, team_name, cached_log_list)
                 
                 detailed_report_df = cached_detailed_report(jira_conn_details, jql_query, st.session_state.selected_team_name)
                 
