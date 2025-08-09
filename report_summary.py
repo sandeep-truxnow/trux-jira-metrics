@@ -9,9 +9,26 @@ from datetime import datetime
 from common import seconds_to_hours, get_summary_issues_by_jql, prepare_summary_jql_query, get_issue_changelog, get_logged_time, show_sprint_name_start_date_and_end_date, get_logged_time_per_sprint, get_logged_time_per_sprint, count_transitions
 
 
+# === SUMMARY COLUMN CONSTANTS ===
+SUMMARY_COLUMNS = {
+    'TEAMS': 'Teams',
+    'TOTAL_ISSUES': 'Total Issues', 
+    'STORY_POINTS': 'Story Points',
+    'ISSUES_COMPLETED': 'Issues Completed',
+    'PERCENT_COMPLETED': 'Completion %',
+    'HOURS_WORKED': 'Sprint Hrs',
+    'ALL_TIME': 'All Time Hrs',
+    'BUGS': 'Bugs',
+    'FAILED_QA_COUNT': 'Failed QA Count',
+    'SPILLOVER_ISSUES': 'Spillover Issues',
+    'SPILLOVER_POINTS': 'Spillover Story Points',
+    'AVG_COMPLETION_DAYS': 'Avg Completion Days',
+    'AVG_SPRINTS_STORY': 'Avg Sprints/Story'
+}
+
 # === GENERATE HEADERS ===
 def generate_headers():
-    return ["Teams", "Issues", "Story Points", "Issues Complete", "% Complete", "Hours Worked", "All Time", "Bugs", "Failed QA Count", "Issues > 1 Sprint", "Points > 1 Sprint", "Avg Completion Days", "Avg Sprints/Story"]
+    return list(SUMMARY_COLUMNS.values())
 
 
 # --- Custom Field IDs ---
@@ -128,18 +145,18 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
 
 
         return team_id, {
-            "Total Issues": total_issues,
-            "Story Points": total_story_points,
-            "Issues Completed": total_issues_closed,
-            "% Completed": percent_work_complete,
-            "Hours Worked": seconds_to_hours(total_hours_worked),
-            "All Time": seconds_to_hours(total_all_time),
-            "Bugs": total_bugs,
-            "Failed QA Count": total_failed_qa_count,
-            "Spillover Issues": total_spillover_issues,
-            "Spillover Story Points": total_spillover_points,
-            "Avg Completion Days": round(avg_completion_days, 1),
-            "Avg Sprints/Story": round(avg_sprints_per_story, 1),
+            SUMMARY_COLUMNS['TOTAL_ISSUES']: total_issues,
+            SUMMARY_COLUMNS['STORY_POINTS']: total_story_points,
+            SUMMARY_COLUMNS['ISSUES_COMPLETED']: total_issues_closed,
+            SUMMARY_COLUMNS['PERCENT_COMPLETED']: percent_work_complete,
+            SUMMARY_COLUMNS['HOURS_WORKED']: seconds_to_hours(total_hours_worked),
+            SUMMARY_COLUMNS['ALL_TIME']: seconds_to_hours(total_all_time),
+            SUMMARY_COLUMNS['BUGS']: total_bugs,
+            SUMMARY_COLUMNS['FAILED_QA_COUNT']: total_failed_qa_count,
+            SUMMARY_COLUMNS['SPILLOVER_ISSUES']: total_spillover_issues,
+            SUMMARY_COLUMNS['SPILLOVER_POINTS']: total_spillover_points,
+            SUMMARY_COLUMNS['AVG_COMPLETION_DAYS']: round(avg_completion_days, 1),
+            SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story, 1),
         }
 
     # Run all teams in parallel
@@ -244,18 +261,18 @@ def generated_summary_report_df_display(team_metrics, teams_data):
         
         rows.append([
             team_name,
-            metrics.get("Total Issues", 0),
-            metrics.get("Story Points", 0),
-            metrics.get("Issues Completed", 0),
-            metrics.get("% Completed", 0.0),
-            metrics.get("Hours Worked", 0.0),
-            metrics.get("All Time", 0.0),
-            metrics.get("Bugs", 0),
-            metrics.get("Failed QA Count", 0),
-            metrics.get("Spillover Issues", 0),
-            metrics.get("Spillover Story Points", 0),
-            metrics.get("Avg Completion Days", 0.0),
-            metrics.get("Avg Sprints/Story", 0.0),
+            metrics.get(SUMMARY_COLUMNS['TOTAL_ISSUES'], 0),
+            metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0),
+            metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], 0),
+            metrics.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['HOURS_WORKED'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['ALL_TIME'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['BUGS'], 0),
+            metrics.get(SUMMARY_COLUMNS['FAILED_QA_COUNT'], 0),
+            metrics.get(SUMMARY_COLUMNS['SPILLOVER_ISSUES'], 0),
+            metrics.get(SUMMARY_COLUMNS['SPILLOVER_POINTS'], 0),
+            metrics.get(SUMMARY_COLUMNS['AVG_COMPLETION_DAYS'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['AVG_SPRINTS_STORY'], 0.0),
         ])
 
     df = pd.DataFrame(rows, columns=generate_headers())
