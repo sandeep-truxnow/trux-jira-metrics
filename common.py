@@ -9,7 +9,8 @@ from collections import OrderedDict
 import re
 from datetime import datetime, timezone
 
-STATUS_INPUT = "'QA Complete', 'Released', 'Closed'"
+STATUS_INPUT = "'Done', 'QA Complete', 'In UAT', 'Ready for Release', 'Released', 'Closed'"
+CLOSED_ISSUE_STATUSES = ['done', 'qa complete', 'in uat', 'ready for release', 'released', 'closed']
 CYCLE_STATUSES = ["In Progress", "In Review", "Ready for Testing", "In Testing"]
 WORKFLOW_STATUSES = [
     "To Do", "In Progress", "Paused", "In Review", "Ready for Testing",
@@ -235,16 +236,28 @@ def fetch_users_page(jira_instance, start_at, max_results, log_list):
 
 def process_users_page(users_page, all_users, filter_domain):
     for user in users_page:
-        if hasattr(user, 'accountId') and user.accountId:
-            email_lower = user.emailAddress.lower() if hasattr(user, 'emailAddress') else ''
-            is_atlassian_user = determine_if_atlassian_user(user, email_lower)
-            is_matching_domain = check_domain_match(email_lower, filter_domain)
+        if _should_process_user(user):
+            user_data = _extract_user_data(user, filter_domain)
+            if user_data:
+                all_users[user.accountId] = user_data
 
-            if is_atlassian_user and is_matching_domain:
-                all_users[user.accountId] = {
-                    'displayName': user.displayName if hasattr(user, 'displayName') else user.accountId,
-                    'emailAddress': user.emailAddress if hasattr(user, 'emailAddress') else 'N/A'
-                }
+
+def _should_process_user(user):
+    return hasattr(user, 'accountId') and user.accountId
+
+
+def _extract_user_data(user, filter_domain):
+    email_lower = user.emailAddress.lower() if hasattr(user, 'emailAddress') else ''
+    
+    if not determine_if_atlassian_user(user, email_lower):
+        return None
+    if not check_domain_match(email_lower, filter_domain):
+        return None
+        
+    return {
+        'displayName': user.displayName if hasattr(user, 'displayName') else user.accountId,
+        'emailAddress': user.emailAddress if hasattr(user, 'emailAddress') else 'N/A'
+    }
 
 
 def determine_if_atlassian_user(user, email_lower):
@@ -586,7 +599,7 @@ def parse_changelog_from_history(changelog):
                 timestamp = datetime.strptime(change['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
                 
                 transitions.append((from_status, to_status, timestamp))
-                if to_status and to_status.lower() in ['qa complete', 'done', 'closed']:
+                if to_status and to_status.lower() in CLOSED_ISSUE_STATUSES:
                     resolved_time = timestamp
     return transitions, resolved_time
 
@@ -594,7 +607,7 @@ def parse_changelog_from_history(changelog):
 def calculate_state_durations(issue_key, issue_data, log_list):   
     changelog = issue_data['changelog']['histories']
     created_time = datetime.strptime(issue_data['fields']['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
-    transitions, resolved_time = parse_changelog_from_history(changelog)
+    transitions, _ = parse_changelog_from_history(changelog)
     durations = calculate_durations(transitions, created_time, issue_key, log_list)
     lead_time, cycle_time = calculate_metrics(transitions, created_time)
     return {

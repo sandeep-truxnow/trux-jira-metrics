@@ -154,14 +154,14 @@ with st.sidebar:
                     if jira_conn_details:
                         with st.spinner("Generating comparison data across all durations..."):
                             all_durations = list(SUMMARY_DURATIONS_DATA.keys())
-                            
-                            @st.cache_data(ttl=CACHE_TTL_SECONDS)
-                            def cached_comparison_data(conn_details, teams_tuple, durations_tuple, timestamp):
-                                return generate_team_comparison_data(conn_details, dict(teams_tuple), list(durations_tuple), st.session_state.summary_log_messages)
-                            
-                            st.session_state.comparison_data = cached_comparison_data(
-                                jira_conn_details, tuple(TEAMS_DATA.items()), tuple(all_durations), datetime.now().timestamp()
-                            )
+                            try:
+                                st.session_state.comparison_data = generate_team_comparison_data(
+                                    jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages
+                                )
+                                add_log_message(st.session_state.summary_log_messages, "info", "Comparison data generated successfully")
+                            except Exception as e:
+                                add_log_message(st.session_state.summary_log_messages, "error", f"Failed to generate comparison data: {e}")
+                                st.session_state.comparison_data = None
             else:
                 pass
         

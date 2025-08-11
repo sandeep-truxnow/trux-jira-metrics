@@ -213,7 +213,7 @@ def generate_detailed_report(jira_conn_details, jql_query, selected_team_name, l
         append_log(log_list, "warn", "No issues found matching the JQL query. Report will be empty.")
         st.session_state.generated_report_df_display = None
 
-        message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'QA Complete', 'Released', or 'Closed'."
+        message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'Done', 'QA Complete', 'Released', or 'Closed'."
         
         # Show human-readable explanation
         if "openSprints()" in jql_query:

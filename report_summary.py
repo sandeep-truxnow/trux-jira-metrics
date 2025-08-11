@@ -33,6 +33,9 @@ SUMMARY_COLUMNS = {
 # SCOPE_CHANGE_GRACE_PERIOD_HOURS = 48  # Hours after sprint start to ignore scope changes - now configurable via UI
 JIRA_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"  # JIRA API datetime format
 
+# === ISSUE STATUS CONSTANTS ===
+CLOSED_ISSUE_STATUSES = ['done', 'qa complete', 'in uat', 'ready for release', 'released', 'closed']
+
 # === GENERATE HEADERS ===
 def generate_headers():
     return list(SUMMARY_COLUMNS.values())
@@ -42,7 +45,7 @@ def generate_headers():
 CUSTOM_FIELD_TEAM_ID = 'customfield_10001'
 CUSTOM_FIELD_STORY_POINTS_ID = 'customfield_10014'
 
-
+ 
 
 if 'generated_summary_report_df_display' not in st.session_state: st.session_state.generated_summary_report_df_display = None
 
@@ -322,12 +325,12 @@ def _get_story_points(fields):
     return story_points
 
 def _calculate_completion_time(histories, created_date, status):
-    if status.lower() not in ["done", "qa complete", "released", "closed"]:
+    if status.lower() not in [status.lower() for status in CLOSED_ISSUE_STATUSES]:
         return 0
     
     for history in histories:
         for item in history['items']:
-            if item['field'] == 'status' and item['toString'].lower() in ['done', 'qa complete', 'released', 'closed']:
+            if item['field'] == 'status' and item['toString'].lower() in [status.lower() for status in CLOSED_ISSUE_STATUSES]:
                 resolved_date = datetime.strptime(history['created'], JIRA_DATETIME_FORMAT)
                 return (resolved_date - created_date).days
     return 0
@@ -432,7 +435,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
     completion_time_days = _calculate_completion_time(histories, created_date, status)
     sprint_start_date = sprint_start_datetime.date() if hasattr(sprint_start_datetime, 'date') else sprint_start_datetime
     bug_count, bugs_time_sprint, bugs_time_all = _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_date)
-    issues_closed = 1 if status.lower() in ["done", "qa complete", "released", "closed"] else 0
+    issues_closed = 1 if status.lower() in [status.lower() for status in CLOSED_ISSUE_STATUSES] else 0
     failed_qa_count = count_transitions(histories, "In Testing", "Rejected") or 0
     worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date) if sprint_end_date else 0
     total_all_time = get_logged_time(histories)
