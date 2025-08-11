@@ -64,7 +64,6 @@ def add_log_message(log_list, level, message):
 # --- Initialize ALL Streamlit session state variables at the TOP LEVEL ---
 if 'summary_log_messages' not in st.session_state: st.session_state.summary_log_messages = []
 if 'detailed_log_messages' not in st.session_state: st.session_state.detailed_log_messages = []
-if 'jira_conn_details' not in st.session_state: st.session_state.jira_conn_details = None
 
 if 'team_options_display' not in st.session_state: st.session_state.team_options_display = list(TEAMS_DATA.keys())
 if 'selected_team_name' not in st.session_state: st.session_state.selected_team_name = list(TEAMS_DATA.keys())[0] 
@@ -98,12 +97,10 @@ if 'detailed_logs_fullscreen' not in st.session_state: st.session_state.detailed
 # --- Main Streamlit App Layout ---
 # --- Sidebar for Jira Credentials and General Report Options ---
 with st.sidebar:
-    with st.expander("JIRA Connection Details", expanded=True):
-        jira_url = "https://truxinc.atlassian.net"
-        jira_email = st.text_input("Jira Email", value=st.session_state.jira_conn_details[1] if st.session_state.jira_conn_details else "", help="Your Jira email or username for API access.", key="sidebar_jira_username")
-        jira_api_token = st.text_input("Jira API Token", type="password", value=st.session_state.jira_conn_details[2] if st.session_state.jira_conn_details else "", help="Generate from your Atlassian account security settings.", key="sidebar_jira_api_token")
-    
-    st.markdown("---")
+    # JIRA Connection Details (hardcoded)
+    jira_url = "https://truxinc.atlassian.net"
+    jira_email = "devops@truxnow.com"  # Replace with your JIRA email
+    jira_api_token = "ATATT3xFfGF0jW8QvPl3S5MyCZPa1CJt9WmUbTPn0MOr_O5Eh1aePI6tXkdIxrcJKUKa7z7iHLawm3YvYU_zjrAoSPAQkXWZN5V1YekPnBwmjw6tqu_RtmrkDDtnyocECiCBAKN5T6waGfFgm1tRCYfig-xpuO9GvookawoD57V3TRLxQ0qXMvw=0BBD706D"  # Replace with your JIRA API token
     
     with st.expander("Summary Report", expanded=True):
     # st.header("Summary Report")
