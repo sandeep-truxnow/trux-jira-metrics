@@ -30,7 +30,7 @@ SUMMARY_COLUMNS = {
 }
 
 # === SCOPE CHANGE CONFIGURATION ===
-SCOPE_CHANGE_GRACE_PERIOD_HOURS = 48  # Hours after sprint start to ignore scope changes
+# SCOPE_CHANGE_GRACE_PERIOD_HOURS = 48  # Hours after sprint start to ignore scope changes - now configurable via UI
 JIRA_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"  # JIRA API datetime format
 
 # === GENERATE HEADERS ===
@@ -369,13 +369,15 @@ def _process_sprint_change_item(key, item, target_sprint_name, history_date, hou
         return 'removed'
     return None
 
-def _process_history_entry(key, history, target_sprint_name, sprint_start_datetime, log_list):
+def _process_history_entry(key, history, target_sprint_name, sprint_start_datetime, log_list, time_range_hours):
     from zoneinfo import ZoneInfo
     history_date_utc = datetime.strptime(history['created'], JIRA_DATETIME_FORMAT)
     history_date = history_date_utc.astimezone(ZoneInfo('America/New_York'))
     hours_after_start = (history_date - sprint_start_datetime).total_seconds() / 3600
     
-    if hours_after_start <= SCOPE_CHANGE_GRACE_PERIOD_HOURS:
+    # Check if change is within the selected time range (0 to time_range_hours)
+    # Only exclude changes that happened before sprint start (negative hours)
+    if hours_after_start < 0:
         return None
         
     for item in history['items']:
@@ -383,14 +385,14 @@ def _process_history_entry(key, history, target_sprint_name, sprint_start_dateti
             return _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list)
     return None
 
-def _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list):
+def _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list, time_range_hours):
     issue_was_added = False
     issue_was_removed = False
     
-    # append_log(log_list, "info", f"Processing scope changes for {key} - target sprint: {target_sprint_name}, sprint start: {sprint_start_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} America/New_York")
+    append_log(log_list, "info", f"Processing scope changes for {key} - target sprint: {target_sprint_name}, sprint start: {sprint_start_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} America/New_York")
     
     for history in histories:
-        change_type = _process_history_entry(key, history, target_sprint_name, sprint_start_datetime, log_list)
+        change_type = _process_history_entry(key, history, target_sprint_name, sprint_start_datetime, log_list, time_range_hours)
         if change_type == 'added' and not issue_was_added:
             issue_was_added = True
         elif change_type == 'removed' and not issue_was_removed:
@@ -398,7 +400,7 @@ def _process_scope_changes(key, histories, target_sprint_name, sprint_start_date
     
     added_to_sprint = 1 if issue_was_added else 0
     removed_from_sprint = 1 if issue_was_removed else 0
-    # append_log(log_list, "info", f"Issue {key} final scope change: added={added_to_sprint}, removed={removed_from_sprint}")
+    append_log(log_list, "info", f"Issue {key} final scope change: added={added_to_sprint}, removed={removed_from_sprint}")
     
     return added_to_sprint, removed_from_sprint
 
@@ -442,7 +444,8 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
         try:
             target_sprint_name = _get_target_sprint_name(selected_summary_duration_name, team_name)
             if target_sprint_name:
-                added_to_sprint, removed_from_sprint = _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list)
+                time_range = getattr(st.session_state, 'scope_time_range', 48)
+                added_to_sprint, removed_from_sprint = _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list, time_range)
         except Exception as e:
             append_log(log_list, "error", f"Error processing scope changes for {key}: {e}")
 

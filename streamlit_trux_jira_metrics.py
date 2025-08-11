@@ -104,7 +104,7 @@ with st.sidebar:
     
     with st.expander("Summary Report", expanded=True):
     # st.header("Summary Report")
-        sprint_count = st.number_input("Previous Sprints to Include", min_value=1, max_value=10, value=3, step=1, help="Number of previous sprints to show in duration dropdown")
+        sprint_count = st.slider("Previous Sprints to Include", min_value=1, max_value=10, value=3, help="Number of previous sprints to show in duration dropdown")
         previous_sprints = get_previous_n_sprints(sprint_count)
         
         # Get current sprint to avoid duplication
@@ -175,8 +175,18 @@ with st.sidebar:
             on_change=on_comparison_toggle_change,
             help="Compare teams across different durations"
         )
+        
+        st.slider(
+            "Scope Change Time Range (hours)",
+            min_value=0,
+            max_value=72,
+            value=8,
+            step=8,
+            key="scope_time_range",
+            help="Show scope changes within this time range after sprint start (0-24h, 24-48h, etc.)"
+        )
 
-    st.markdown("---")
+    # st.markdown("---")
 
     with st.expander("Detailed Report"):
         st.markdown("Report Thresholds")
@@ -301,6 +311,8 @@ with tab_summary:
             - **Spillover Story Points**: Story points from issues that span multiple sprints
             - **Avg Completion Days**: Average number of days from issue creation to completion
             - **Avg Sprints/Story**: Average number of sprints per story for completed issues
+            - **Scope Changes**: Issues added (+) or removed (-) from sprint within selected time range after sprint start
+            
             """)
         
         # Display comparison analysis if enabled
