@@ -14,13 +14,20 @@ def generate_team_comparison_data(jira_conn_details, teams_data, all_durations, 
             jira_conn_details, 
             duration_name, 
             teams_data, 
-            []
+            log_list
         )
         return duration_name, team_metrics
     
     # Process all durations in parallel
+    import streamlit as st
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+    
     with ThreadPoolExecutor(max_workers=min(5, len(all_durations))) as executor:
-        futures = {executor.submit(process_duration, duration): duration for duration in all_durations}
+        futures = {}
+        for duration in all_durations:
+            future = executor.submit(process_duration, duration)
+            add_script_run_ctx(future)
+            futures[future] = duration
         
         for future in as_completed(futures):
             duration_name, team_metrics = future.result()
@@ -139,7 +146,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
     # Detailed metric comparisons
     st.markdown("**Detailed Metric Comparisons**")
     
-    tab1, tab2, tab3 = st.tabs(["Story Points", "Sprint Hours", "Bugs"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Story Points", "Sprint Hours", "Bugs", "Scope Changes"])
     
     with tab1:
         story_points_df = create_metric_comparison_table(
@@ -182,3 +189,15 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(bugs_df, hide_index=True, use_container_width=True)
+    
+    with tab4:
+        scope_changes_df = create_metric_comparison_table(
+            comparison_data, teams_data, 
+            SUMMARY_COLUMNS['SCOPE_CHANGES'], 'Scope Changes'
+        )
+        if scope_changes_df is not None:
+            if selected_duration in scope_changes_df.columns:
+                styled_df = scope_changes_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(scope_changes_df, hide_index=True, use_container_width=True)

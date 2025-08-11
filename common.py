@@ -64,7 +64,55 @@ def connection_setup(jira_url, jira_email, jira_api_token, log_list):
     
     return jira_conn_details
 
-def show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list):
+@st.cache_data(ttl=30, hash_funcs={list: lambda x: None})
+def get_actual_sprint_dates_from_jira(jira_url, username, api_token, sprint_name, team_name, log_list):
+    """Get actual sprint start/end dates from JIRA API"""
+    try:
+        auth = HTTPBasicAuth(username, api_token)
+        # Search for the sprint by name
+        url = f"{jira_url}/rest/agile/1.0/board"
+        response = requests.get(url, auth=auth)
+        response.raise_for_status()
+        boards = response.json().get('values', [])
+        
+        # Find board for the team (assuming board name contains team name)
+        board_id = None
+        for board in boards:
+            if team_name.lower() in board['name'].lower():
+                board_id = board['id']
+                break
+        
+        if not board_id and boards:
+            board_id = boards[0]['id']  # Fallback to first board
+            
+        if board_id:
+            # Get sprints for the board
+            url = f"{jira_url}/rest/agile/1.0/board/{board_id}/sprint"
+            response = requests.get(url, auth=auth, params={'maxResults': 100})
+            response.raise_for_status()
+            sprints = response.json().get('values', [])
+            
+            # Find the specific sprint
+            target_sprint_name = f"{team_name} {sprint_name}"
+            for sprint in sprints:
+                if sprint['name'] == target_sprint_name:
+                    start_datetime = datetime.strptime(sprint['startDate'], "%Y-%m-%dT%H:%M:%S.%f%z")
+                    end_datetime = datetime.strptime(sprint['endDate'], "%Y-%m-%dT%H:%M:%S.%f%z")
+                    
+                    # Convert to America/New_York timezone
+                    from zoneinfo import ZoneInfo
+                    ny_start = start_datetime.astimezone(ZoneInfo('America/New_York'))
+                    ny_end = end_datetime.astimezone(ZoneInfo('America/New_York'))
+                    
+                    append_log(log_list, "info", f"JIRA sprint {target_sprint_name} UTC: {start_datetime.time()}, NY: {ny_start.time()}")
+                    return ny_start, ny_end
+                    
+    except Exception as e:
+        append_log(log_list, "warn", f"Could not fetch actual sprint dates from JIRA: {e}")
+    
+    return None, None
+
+def show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list, jira_conn_details=None):
     sprint_name = None
     sprint_start_date = None
     sprint_end_date = None
@@ -449,7 +497,11 @@ def parse_date(dt):
     """Convert date or string to UTC datetime."""
     if isinstance(dt, date):
         return datetime.combine(dt, datetime.min.time()).replace(tzinfo=timezone.utc)
-    return datetime.strptime(dt, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    elif isinstance(dt, str):
+        return datetime.strptime(dt, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    elif isinstance(dt, datetime):
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt
 
 def get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date):
     total_logged_seconds = 0
@@ -553,8 +605,8 @@ def calculate_state_durations(issue_key, issue_data, log_list):
 
 def get_sprint_for_date(target_date, base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
     base_year, base_sprint_num = map(int, base_sprint.split("."))
-    base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").date()
-    target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+    base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    target_date = datetime.strptime(target_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     # Calculate days between target and base
     days_elapsed = (target_date - base_start_date).days
@@ -572,13 +624,13 @@ def get_sprint_for_date(target_date, base_sprint="2025.12", base_start_date_str=
     sprint_end_date = sprint_start_date + timedelta(days=sprint_length_days - 1)
     sprint_name = f"{sprint_year}.{sprint_num:02d}"
 
-    return sprint_name, sprint_start_date, sprint_end_date
+    return sprint_name, sprint_start_date.date(), sprint_end_date.date()
 
 
 def get_sprint_dates_from_name(sprint_name, base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
     base_year, base_sprint_num = map(int, base_sprint.split("."))
     target_year, target_sprint_num = map(int, sprint_name.split("."))
-    base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").date()
+    base_start_date = datetime.strptime(base_start_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     # Calculate total number of sprints between base and target
     year_diff = target_year - base_year
@@ -588,7 +640,7 @@ def get_sprint_dates_from_name(sprint_name, base_sprint="2025.12", base_start_da
     sprint_start_date = base_start_date + timedelta(days=sprint_diff * sprint_length_days)
     sprint_end_date = sprint_start_date + timedelta(days=sprint_length_days - 1)
 
-    return sprint_start_date, sprint_end_date
+    return sprint_start_date.date(), sprint_end_date.date()
 
 
 def get_previous_n_sprints(count, base_sprint="2025.12", base_start_date_str="2025-06-11", sprint_length_days=14):
