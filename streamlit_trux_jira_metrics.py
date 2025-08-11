@@ -152,15 +152,16 @@ with st.sidebar:
                 if st.session_state.show_comparison:
                     jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.summary_log_messages)
                     if jira_conn_details:
-                        all_durations = list(SUMMARY_DURATIONS_DATA.keys())
-                        
-                        @st.cache_data(ttl=CACHE_TTL_SECONDS)
-                        def cached_comparison_data(conn_details, teams_tuple, durations_tuple, timestamp):
-                            return generate_team_comparison_data(conn_details, dict(teams_tuple), list(durations_tuple), st.session_state.summary_log_messages)
-                        
-                        st.session_state.comparison_data = cached_comparison_data(
-                            jira_conn_details, tuple(TEAMS_DATA.items()), tuple(all_durations), datetime.now().timestamp()
-                        )
+                        with st.spinner("Generating comparison data across all durations..."):
+                            all_durations = list(SUMMARY_DURATIONS_DATA.keys())
+                            
+                            @st.cache_data(ttl=CACHE_TTL_SECONDS)
+                            def cached_comparison_data(conn_details, teams_tuple, durations_tuple, timestamp):
+                                return generate_team_comparison_data(conn_details, dict(teams_tuple), list(durations_tuple), st.session_state.summary_log_messages)
+                            
+                            st.session_state.comparison_data = cached_comparison_data(
+                                jira_conn_details, tuple(TEAMS_DATA.items()), tuple(all_durations), datetime.now().timestamp()
+                            )
             else:
                 pass
         
