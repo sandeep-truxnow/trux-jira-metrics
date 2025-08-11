@@ -66,7 +66,7 @@ def _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, t
     from common import get_actual_sprint_dates_from_jira
     actual_start_dt, actual_end_dt = get_actual_sprint_dates_from_jira(jira_url, jira_username, jira_api_token, sprint_name, team_name, log_list)
     if actual_start_dt and actual_end_dt:
-        append_log(log_list, "info", f"Using actual JIRA sprint datetimes for {team_name}")
+        # append_log(log_list, "info", f"Using actual JIRA sprint datetimes for {team_name}")
         return actual_start_dt, actual_start_dt.date(), actual_end_dt.date()
     else:
         from zoneinfo import ZoneInfo
@@ -122,16 +122,20 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
         sprint_start_datetime, sprint_start_date, sprint_end_date = _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, team_name, sprint_start_date, log_list)
         
-        append_log(log_list, "info", f"==> {team_name} {selected_summary_duration_name} sprint_start_date = {sprint_start_date}, sprint_start_datetime = {sprint_start_datetime} (America/New_York), sprint_end_date = {sprint_end_date}")
+        # append_log(log_list, "info", f"==> {team_name} {selected_summary_duration_name} sprint_start_date = {sprint_start_date}, sprint_start_datetime = {sprint_start_datetime} (America/New_York), sprint_end_date = {sprint_end_date}")
        
         issues = get_summary_issues_by_jql(jql, jira_url, jira_username, jira_api_token, log_list)
         if not issues:
             append_log(log_list, "warn", f"No issues found for team {team_name}. Report will be empty.")
-            return team_id, None
+            return team_id, _calculate_team_metrics([])
         
         append_log(log_list, "info", f"Found {len(issues)} issues for team {team_name}.")
         all_metrics = generate_summary_report_streamlit(team_name, issues, jira_url, jira_username, jira_api_token, selected_summary_duration_name, sprint_start_datetime, sprint_end_date, log_list)
         
+        if all_metrics is None:
+            all_metrics = []
+        
+        append_log(log_list, "info", f"Team {team_name} processed {len(all_metrics)} metrics from {len(issues)} issues")
         return team_id, _calculate_team_metrics(all_metrics)
 
     # Run all teams in parallel
@@ -147,7 +151,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
 
         for future in as_completed(futures):
             team_id, result = future.result()
-            if result:
+            if result is not None:
                 team_metrics[team_id] = result
 
     append_log(log_list, "info", "Report generated!")
@@ -216,10 +220,17 @@ def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_su
     def process_issue(issue):
         try:
             issue_key = issue.get("key", "")
+            if not sprint_start_date:
+                append_log(log_list, "error", f"sprint_start_date is None for issue {issue_key}")
+                return None
             issue_data = get_issue_changelog(issue_key, jira_url, username, api_token, log_list)
-            return extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list)
+            result = extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list)
+            if not result:
+                append_log(log_list, "error", f"extract_issue_meta returned empty for {issue_key}")
+            return result
         except Exception as e:
-            append_log(log_list, "error", f"Error processing issue {issue.get('key', 'unknown')}: {e}")
+            import traceback
+            append_log(log_list, "error", f"Error processing issue {issue.get('key', 'unknown')}: {e}\nTraceback: {traceback.format_exc()}")
             return None
 
     # Process issues in parallel with increased workers
@@ -235,7 +246,7 @@ def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_su
         
         for future in as_completed(futures):
             result = future.result()
-            if result:
+            if result is not None:
                 all_metrics.append(result)
 
     return all_metrics
@@ -326,7 +337,7 @@ def _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_da
         return 0, 0, 0
     
     bug_count = 1
-    bugs_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
+    bugs_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date) if sprint_end_date else 0
     bugs_time_all = get_logged_time(histories)
     return bug_count, bugs_time_sprint, bugs_time_all
 
@@ -376,7 +387,7 @@ def _process_scope_changes(key, histories, target_sprint_name, sprint_start_date
     issue_was_added = False
     issue_was_removed = False
     
-    append_log(log_list, "info", f"Processing scope changes for {key} - target sprint: {target_sprint_name}, sprint start: {sprint_start_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} America/New_York")
+    # append_log(log_list, "info", f"Processing scope changes for {key} - target sprint: {target_sprint_name}, sprint start: {sprint_start_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} America/New_York")
     
     for history in histories:
         change_type = _process_history_entry(key, history, target_sprint_name, sprint_start_datetime, log_list)
@@ -387,7 +398,7 @@ def _process_scope_changes(key, histories, target_sprint_name, sprint_start_date
     
     added_to_sprint = 1 if issue_was_added else 0
     removed_from_sprint = 1 if issue_was_removed else 0
-    append_log(log_list, "info", f"Issue {key} final scope change: added={added_to_sprint}, removed={removed_from_sprint}")
+    # append_log(log_list, "info", f"Issue {key} final scope change: added={added_to_sprint}, removed={removed_from_sprint}")
     
     return added_to_sprint, removed_from_sprint
 
@@ -397,9 +408,13 @@ def _log_debug_history_entry(key, history_date, hours_after_start, history, log_
 # === EXTRACT ISSUE META ===
 def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_datetime, sprint_end_date, log_list):
     key = issue.get("key", "")
-    fields = issue_data['fields']
+    fields = issue_data.get('fields', {})
     if not fields:
         append_log(log_list, "error", f"No fields found for issue {key}.")
+        return {}
+    
+    if not issue_data.get('changelog', {}).get('histories', []):
+        append_log(log_list, "error", f"No changelog found for issue {key}.")
         return {}
     
     histories = issue_data['changelog']['histories']
@@ -417,7 +432,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
     bug_count, bugs_time_sprint, bugs_time_all = _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_date)
     issues_closed = 1 if status.lower() in ["done", "qa complete", "released", "closed"] else 0
     failed_qa_count = count_transitions(histories, "In Testing", "Rejected") or 0
-    worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
+    worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date) if sprint_end_date else 0
     total_all_time = get_logged_time(histories)
     
     added_to_sprint = 0

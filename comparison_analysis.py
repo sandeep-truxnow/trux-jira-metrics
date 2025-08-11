@@ -146,14 +146,26 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
     # Detailed metric comparisons
     st.markdown("**Detailed Metric Comparisons**")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Story Points", "Sprint Hours", "Bugs", "Scope Changes"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Issues", "Story Points", "Bugs", "Sprint Hours", "Scope Changes"])
     
     with tab1:
+        issues_df = create_metric_comparison_table(
+            comparison_data, teams_data, 
+            SUMMARY_COLUMNS['TOTAL_ISSUES'], 'Issues'
+        )
+        if issues_df is not None:
+            if selected_duration in issues_df.columns:
+                styled_df = issues_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(issues_df, hide_index=True, use_container_width=True)
+    
+    with tab2:
         story_points_df = create_metric_comparison_table(
             comparison_data, teams_data, 
             SUMMARY_COLUMNS['STORY_POINTS'], 'Story Points'
         )
-        if story_points_df is not None:
+        if story_points_df is not None and len(story_points_df) > 0:
             # Convert story points to integers
             for col in story_points_df.columns[1:]:
                 story_points_df[col] = story_points_df[col].round(0).astype(int)
@@ -162,21 +174,6 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(story_points_df, hide_index=True, use_container_width=True)
-    
-    with tab2:
-        sprint_hours_df = create_metric_comparison_table(
-            comparison_data, teams_data, 
-            SUMMARY_COLUMNS.get('SPRINT_HOURS', 'Sprint Hrs'), 'Sprint Hours'
-        )
-        if sprint_hours_df is not None:
-            # Round sprint hours to whole numbers
-            for col in sprint_hours_df.columns[1:]:
-                sprint_hours_df[col] = sprint_hours_df[col].round(0).astype(int)
-            if selected_duration in sprint_hours_df.columns:
-                styled_df = sprint_hours_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
-                st.dataframe(styled_df, hide_index=True, use_container_width=True)
-            else:
-                st.dataframe(sprint_hours_df, hide_index=True, use_container_width=True)
     
     with tab3:
         bugs_df = create_metric_comparison_table(
@@ -191,6 +188,21 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 st.dataframe(bugs_df, hide_index=True, use_container_width=True)
     
     with tab4:
+        sprint_hours_df = create_metric_comparison_table(
+            comparison_data, teams_data, 
+            SUMMARY_COLUMNS.get('SPRINT_HOURS', 'Sprint Hrs'), 'Sprint Hours'
+        )
+        if sprint_hours_df is not None and len(sprint_hours_df) > 0:
+            # Round sprint hours to whole numbers
+            for col in sprint_hours_df.columns[1:]:
+                sprint_hours_df[col] = sprint_hours_df[col].round(0).astype(int)
+            if selected_duration in sprint_hours_df.columns:
+                styled_df = sprint_hours_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(sprint_hours_df, hide_index=True, use_container_width=True)
+    
+    with tab5:
         scope_changes_df = create_metric_comparison_table(
             comparison_data, teams_data, 
             SUMMARY_COLUMNS['SCOPE_CHANGES'], 'Scope Changes'

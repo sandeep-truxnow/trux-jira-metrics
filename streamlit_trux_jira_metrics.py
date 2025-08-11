@@ -290,13 +290,16 @@ with tab_summary:
             """)
         
         # Display comparison analysis if enabled
-        if st.session_state.show_comparison and st.session_state.comparison_data:
-            st.markdown("---")
-            display_comparison_analysis(
-                st.session_state.comparison_data, 
-                TEAMS_DATA, 
-                st.session_state.selected_summary_duration_name
-            )
+        if st.session_state.show_comparison:
+            if st.session_state.comparison_data == "loading":
+                st.info("📊 Team comparison analysis will be available after clicking refresh")
+            elif st.session_state.comparison_data and isinstance(st.session_state.comparison_data, dict):
+                st.markdown("---")
+                display_comparison_analysis(
+                    st.session_state.comparison_data, 
+                    TEAMS_DATA, 
+                    st.session_state.selected_summary_duration_name
+                )
     else:
         st.info("Click 'Generate Summary Report' to view the summary data.")
         
@@ -366,22 +369,19 @@ if generate_summary_button:
                 return generate_summary_report(teams_list, conn_details, duration_name, dict(teams_data_tuple), st.session_state.summary_log_messages)
             
             # Convert TEAMS_DATA to tuple for cache key stability and add timestamp
-            teams_data_tuple = tuple(TEAMS_DATA.items())
+            teams_data_tuple = tuple(TEAMS_DATA.items()) if TEAMS_DATA else ()
             button_timestamp = datetime.now().timestamp()  # Fresh timestamp on each button click
-            team_metrics = cached_summary_report(tuple(TEAMS_DATA.values()), jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple, button_timestamp)
+            teams_tuple = tuple(TEAMS_DATA.values()) if TEAMS_DATA else ()
             
-            # Generate comparison data if requested (only once)
+            if not teams_tuple:
+                add_log_message(st.session_state.summary_log_messages, "error", "No teams data available")
+            else:
+                team_metrics = cached_summary_report(teams_tuple, jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple, button_timestamp)
+            
+            # Skip comparison data generation for faster initial load
             if st.session_state.show_comparison and st.session_state.comparison_data is None:
-                with st.spinner("Generating comparison data across all durations..."):
-                    all_durations = list(SUMMARY_DURATIONS_DATA.keys())
-                    
-                    @st.cache_data(ttl=CACHE_TTL_SECONDS)
-                    def cached_comparison_data(conn_details, teams_tuple, durations_tuple, timestamp):
-                        return generate_team_comparison_data(conn_details, dict(teams_tuple), list(durations_tuple), st.session_state.summary_log_messages)
-                    
-                    st.session_state.comparison_data = cached_comparison_data(
-                        jira_conn_details, tuple(TEAMS_DATA.items()), tuple(all_durations), button_timestamp
-                    )
+                st.session_state.comparison_data = "loading"
+                add_log_message(st.session_state.summary_log_messages, "info", "Comparison analysis will be available after refresh")
 
             if team_metrics is not None:
                 df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)
