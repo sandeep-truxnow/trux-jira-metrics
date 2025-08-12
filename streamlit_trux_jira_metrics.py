@@ -27,17 +27,6 @@ SUMMARY_DURATIONS_DATA = OrderedDict([
     ("Current Sprint", "openSprints()")
 ])
 
-# st.markdown(
-#     """
-#     <style>
-#     .stApp {
-#         background-color: #f0f8ff; /* Light blue */
-#     }
-#     </style>
-#     """,
-#     unsafe_allow_html=True
-# )
-
 # Theme-aware CSS for both light and dark modes
 st.markdown(
     """
@@ -209,7 +198,7 @@ with st.sidebar:
                             all_durations = list(SUMMARY_DURATIONS_DATA.keys())
                             try:
                                 st.session_state.comparison_data = generate_team_comparison_data(
-                                    jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages
+                                    jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages, st.session_state.scope_time_range
                                 )
                                 add_log_message(st.session_state.summary_log_messages, "info", "Comparison data generated successfully")
                             except Exception as e:
@@ -230,14 +219,22 @@ with st.sidebar:
             help="Compare teams across different durations"
         )
         
-        st.slider(
+        # def get_scope_changes_from_summary(time_hours):
+        #     """Get actual scope changes from summary report data."""
+        #     if st.session_state.summary_data is not None:
+        #         # Extract scope changes from summary data based on time_hours
+        #         # This will be populated from actual Jira data
+        #         return 0, 0  # Placeholder - will be replaced with actual data
+        #     return 0, 0
+        
+        scope_time_range = st.slider(
             "Scope Change Time Range (hours)",
             min_value=0,
-            max_value=72,
-            value=8,
-            step=8,
+            max_value=168,
+            value=48,
+            step=24,
             key="scope_time_range",
-            help="Show scope changes within this time range after sprint start (0-24h, 24-48h, etc.)"
+            help="Show scope changes within this time range after sprint start"
         )
 
     # st.markdown("---")
@@ -276,11 +273,7 @@ with st.sidebar:
 
         def on_threshold_change():
             pass
-            
-        # cycle_time_threshold_days = st.number_input("Cycle Time Threshold (days)", min_value=1, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
-        # lead_time_threshold_days = st.number_input("Lead Time Threshold (days)", min_value=1, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
-        # cycle_threshold_hours = cycle_time_threshold_days * 24
-        # lead_threshold_hours = lead_time_threshold_days * 24
+
 
         detailed_duration_names = list(DETAILED_DURATIONS_DATA.keys())
         current_detailed_duration_name_for_selector = st.session_state.selected_detailed_duration_name
@@ -457,8 +450,8 @@ if generate_summary_button:
         with st.spinner("Fetching issues and generating summary report..."):
             # Use caching for summary report with timestamp to ensure fresh calls on button click
             @st.cache_data(ttl=CACHE_TTL_SECONDS)
-            def cached_summary_report(teams_list, conn_details, duration_name, teams_data_tuple, timestamp):
-                return generate_summary_report(teams_list, conn_details, duration_name, dict(teams_data_tuple), st.session_state.summary_log_messages)
+            def cached_summary_report(teams_list, conn_details, duration_name, teams_data_tuple, timestamp, scope_hours):
+                return generate_summary_report(teams_list, conn_details, duration_name, dict(teams_data_tuple), st.session_state.summary_log_messages, scope_hours)
             
             # Convert TEAMS_DATA to tuple for cache key stability and add timestamp
             teams_data_tuple = tuple(TEAMS_DATA.items()) if TEAMS_DATA else ()
@@ -468,14 +461,14 @@ if generate_summary_button:
             if not teams_tuple:
                 add_log_message(st.session_state.summary_log_messages, "error", "No teams data available")
             else:
-                team_metrics = cached_summary_report(teams_tuple, jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple, button_timestamp)
+                team_metrics = cached_summary_report(teams_tuple, jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple, button_timestamp, st.session_state.scope_time_range)
             
             # Generate comparison data if enabled
             if st.session_state.show_comparison:
                 all_durations = list(SUMMARY_DURATIONS_DATA.keys())
                 try:
                     st.session_state.comparison_data = generate_team_comparison_data(
-                        jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages
+                        jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages, st.session_state.scope_time_range
                     )
                     add_log_message(st.session_state.summary_log_messages, "info", "Comparison data generated successfully")
                 except Exception as e:
@@ -643,9 +636,22 @@ else:
             st.markdown(summary_title)
             
             # Summary logs controls
-            if st.button("⛶", key="summary_logs_fullscreen_toggle", help="Expand to fullscreen"):
-                st.session_state.summary_logs_fullscreen = True
-                st.rerun()
+            col1a, col1b = st.columns([1, 1])
+            with col1a:
+                if st.button("⛶", key="summary_logs_fullscreen_toggle", help="Expand to fullscreen"):
+                    st.session_state.summary_logs_fullscreen = True
+                    st.rerun()
+            with col1b:
+                if st.session_state.summary_log_messages:
+                    log_content = "\n".join(st.session_state.summary_log_messages)
+                    st.download_button(
+                        "📥", 
+                        data=log_content,
+                        file_name=f"summary_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain",
+                        key="download_summary_logs",
+                        help="Download summary logs"
+                    )
             
             if st.session_state.summary_log_messages:
                 for log_msg in st.session_state.summary_log_messages:
@@ -658,9 +664,22 @@ else:
             st.markdown(detailed_title)
             
             # Detailed logs controls
-            if st.button("⛶", key="detailed_logs_fullscreen_toggle", help="Expand to fullscreen"):
-                st.session_state.detailed_logs_fullscreen = True
-                st.rerun()
+            col2a, col2b = st.columns([1, 1])
+            with col2a:
+                if st.button("⛶", key="detailed_logs_fullscreen_toggle", help="Expand to fullscreen"):
+                    st.session_state.detailed_logs_fullscreen = True
+                    st.rerun()
+            with col2b:
+                if st.session_state.detailed_log_messages:
+                    log_content = "\n".join(st.session_state.detailed_log_messages)
+                    st.download_button(
+                        "📥", 
+                        data=log_content,
+                        file_name=f"detailed_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain",
+                        key="download_detailed_logs",
+                        help="Download detailed logs"
+                    )
             
             if st.session_state.detailed_log_messages:
                 for log_msg in st.session_state.detailed_log_messages:

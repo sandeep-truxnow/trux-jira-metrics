@@ -30,7 +30,6 @@ SUMMARY_COLUMNS = {
 }
 
 # === SCOPE CHANGE CONFIGURATION ===
-# SCOPE_CHANGE_GRACE_PERIOD_HOURS = 48  # Hours after sprint start to ignore scope changes - now configurable via UI
 JIRA_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"  # JIRA API datetime format
 
 # === ISSUE STATUS CONSTANTS ===
@@ -114,7 +113,7 @@ def _calculate_team_metrics(all_metrics):
         SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues}/-{total_removed_issues}"
     }
 
-def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, teams_data, log_list):
+def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, teams_data, log_list, scope_hours=None):
     jira_url, jira_username, jira_api_token = jira_conn_details
     team_metrics = {}
 
@@ -135,7 +134,8 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             return team_id, _calculate_team_metrics([])
         
         append_log(log_list, "info", f"Found {len(issues)} issues for team {team_name}.")
-        all_metrics = generate_summary_report_streamlit(team_name, issues, jira_url, jira_username, jira_api_token, selected_summary_duration_name, sprint_start_datetime, final_sprint_end_date, log_list)
+        append_log(log_list, "info", f"Scope change duration (grace period) = {scope_hours} hours.")
+        all_metrics = generate_summary_report_streamlit(team_name, issues, jira_url, jira_username, jira_api_token, selected_summary_duration_name, sprint_start_datetime, final_sprint_end_date, log_list, scope_hours)
         
         if all_metrics is None:
             all_metrics = []
@@ -208,9 +208,9 @@ def get_issue_summary_by_jql(jql, jira_url, username, api_token, log_list):
 def generated_summary_report_df_display():
     return ""
 
-def generate_summary_report_streamlit(team_name, issues, jira_url, username, api_token, selected_summary_duration_name, sprint_start_date, sprint_end_date, log_list):
+def generate_summary_report_streamlit(team_name, issues, jira_url, username, api_token, selected_summary_duration_name, sprint_start_date, sprint_end_date, log_list, scope_hours=None):
     append_log(log_list, "info", f"Collecting metrics for {len(issues)} issues. This may take a while...")
-    all_metrics = collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list)
+    all_metrics = collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list, scope_hours)
     
     if not all_metrics:
         append_log(log_list, "warn", "No metrics collected. Report will be empty.")
@@ -219,7 +219,7 @@ def generate_summary_report_streamlit(team_name, issues, jira_url, username, api
     append_log(log_list, "info", f"{team_name} metrics generated successfully!")
     return all_metrics
 
-def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list):
+def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list, scope_hours=None):
     all_metrics = []
 
     def process_issue(issue):
@@ -229,7 +229,7 @@ def collect_metrics_streamlit(issues, jira_url, username, api_token, selected_su
                 append_log(log_list, "error", f"sprint_start_date is None for issue {issue_key}")
                 return None
             issue_data = get_issue_changelog(issue_key, jira_url, username, api_token, log_list)
-            result = extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list)
+            result = extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_date, sprint_end_date, log_list, scope_hours)
             if not result:
                 append_log(log_list, "error", f"extract_issue_meta returned empty for {issue_key}")
             return result
@@ -357,7 +357,7 @@ def _get_target_sprint_name(selected_summary_duration_name, team_name):
         return f"{team_name} {sprint_number}"
     return None
 
-def _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list):
+def _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list, time_range_hours):
     from_sprint = item.get('fromString', '') or ''
     to_sprint = item.get('toString', '') or ''
     
@@ -380,14 +380,16 @@ def _process_history_entry(key, history, target_sprint_name, sprint_start_dateti
     history_date = history_date_utc.astimezone(ZoneInfo('America/New_York'))
     hours_after_start = (history_date - sprint_start_datetime).total_seconds() / 3600
     
-    # Check if change is within the selected time range (0 to time_range_hours)
-    # Only exclude changes that happened before sprint start (negative hours)
+    # Only include changes within the selected time range after sprint start
     if hours_after_start < 0:
         return None
         
     for item in history['items']:
         if item['field'] == 'Sprint':
-            return _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list)
+             append_log(log_list, "info", f"Processing history entry for {key} at {history_date.strftime('%Y-%m-%d %H:%M:%S')} NY ({hours_after_start:.1f}h after start).")
+
+             if hours_after_start > time_range_hours:
+                return _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list, time_range_hours)
     return None
 
 def _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list, time_range_hours):
@@ -409,11 +411,9 @@ def _process_scope_changes(key, histories, target_sprint_name, sprint_start_date
     
     return added_to_sprint, removed_from_sprint
 
-def _log_debug_history_entry(key, history_date, hours_after_start, history, log_list):
-    pass  # Debug logging removed
 
 # === EXTRACT ISSUE META ===
-def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_datetime, sprint_end_date, log_list):
+def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_name, sprint_start_datetime, sprint_end_date, log_list, scope_hours=None):
     key = issue.get("key", "")
     fields = issue_data.get('fields', {})
     if not fields:
@@ -449,8 +449,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
         try:
             target_sprint_name = _get_target_sprint_name(selected_summary_duration_name, team_name)
             if target_sprint_name:
-                time_range = getattr(st.session_state, 'scope_time_range', 48)
-                added_to_sprint, removed_from_sprint = _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list, time_range)
+                added_to_sprint, removed_from_sprint = _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list, scope_hours)
         except Exception as e:
             append_log(log_list, "error", f"Error processing scope changes for {key}: {e}")
 

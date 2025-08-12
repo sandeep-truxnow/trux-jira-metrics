@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from report_summary import generate_summary_report, generated_summary_report_df_display, SUMMARY_COLUMNS
 
-def generate_team_comparison_data(jira_conn_details, teams_data, all_durations, log_list):
+def generate_team_comparison_data(jira_conn_details, teams_data, all_durations, log_list, scope_hours=72):
     """Generate comparison data for all teams across all durations"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
     
@@ -14,7 +14,8 @@ def generate_team_comparison_data(jira_conn_details, teams_data, all_durations, 
             jira_conn_details, 
             duration_name, 
             teams_data, 
-            log_list
+            log_list,
+            scope_hours
         )
         return duration_name, team_metrics
     
