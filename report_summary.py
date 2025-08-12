@@ -357,16 +357,16 @@ def _get_target_sprint_name(selected_summary_duration_name, team_name):
         return f"{team_name} {sprint_number}"
     return None
 
-def _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list, time_range_hours):
+def _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list):
     from_sprint = item.get('fromString', '') or ''
     to_sprint = item.get('toString', '') or ''
     
-    append_log(log_list, "info", f"Issue {key}: Sprint change at {history_date.strftime('%Y-%m-%d %H:%M:%S')} NY ({hours_after_start:.1f}h after start) - From: '{from_sprint}' To: '{to_sprint}'")
-    
     target_in_from = target_sprint_name in from_sprint
     target_in_to = target_sprint_name in to_sprint
+
+    append_log(log_list, "info", f"Issue {key}: Target Sprint Name: {target_sprint_name}, Target in From: {target_in_from} and Target in To: {target_in_to}. Sprint change at {history_date.strftime('%Y-%m-%d %H:%M:%S')} NY ({hours_after_start:.1f}h after start) - From: '{from_sprint}' To: '{to_sprint}'")
     
-    if target_in_to and not target_in_from:
+    if (target_in_to and not target_in_from) or (target_in_from and target_in_to):
         append_log(log_list, "info", f"🔍 SCOPE CHANGE - ADDED: {key} to {target_sprint_name}")
         return 'added'
     elif target_in_from and not target_in_to:
@@ -389,7 +389,7 @@ def _process_history_entry(key, history, target_sprint_name, sprint_start_dateti
              append_log(log_list, "info", f"Processing history entry for {key} at {history_date.strftime('%Y-%m-%d %H:%M:%S')} NY ({hours_after_start:.1f}h after start).")
 
              if hours_after_start > time_range_hours:
-                return _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list, time_range_hours)
+                return _process_sprint_change_item(key, item, target_sprint_name, history_date, hours_after_start, log_list)
     return None
 
 def _process_scope_changes(key, histories, target_sprint_name, sprint_start_datetime, log_list, time_range_hours):
