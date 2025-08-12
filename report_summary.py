@@ -123,7 +123,9 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         jql = prepare_summary_jql_query(team_id, team_name, selected_summary_duration_name, log_list)
         
         sprint_name, sprint_start_date, sprint_end_date = show_sprint_name_start_date_and_end_date(selected_summary_duration_name, log_list)
-        sprint_start_datetime, sprint_start_date, sprint_end_date = _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, team_name, sprint_start_date, log_list)
+        sprint_start_datetime, sprint_start_date, actual_sprint_end_date = _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, team_name, sprint_start_date, log_list)
+        # Use the original sprint_end_date if actual_sprint_end_date is None
+        final_sprint_end_date = actual_sprint_end_date or sprint_end_date
         
         # append_log(log_list, "info", f"==> {team_name} {selected_summary_duration_name} sprint_start_date = {sprint_start_date}, sprint_start_datetime = {sprint_start_datetime} (America/New_York), sprint_end_date = {sprint_end_date}")
        
@@ -133,7 +135,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             return team_id, _calculate_team_metrics([])
         
         append_log(log_list, "info", f"Found {len(issues)} issues for team {team_name}.")
-        all_metrics = generate_summary_report_streamlit(team_name, issues, jira_url, jira_username, jira_api_token, selected_summary_duration_name, sprint_start_datetime, sprint_end_date, log_list)
+        all_metrics = generate_summary_report_streamlit(team_name, issues, jira_url, jira_username, jira_api_token, selected_summary_duration_name, sprint_start_datetime, final_sprint_end_date, log_list)
         
         if all_metrics is None:
             all_metrics = []
@@ -437,7 +439,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
     bug_count, bugs_time_sprint, bugs_time_all = _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_date)
     issues_closed = 1 if status.lower() in [status.lower() for status in CLOSED_ISSUE_STATUSES] else 0
     failed_qa_count = count_transitions(histories, "In Testing", "Rejected") or 0
-    worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date) if sprint_end_date else 0
+    worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
     total_all_time = get_logged_time(histories)
     
     added_to_sprint = 0

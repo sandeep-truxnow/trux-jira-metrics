@@ -417,10 +417,17 @@ if generate_summary_button:
             else:
                 team_metrics = cached_summary_report(teams_tuple, jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple, button_timestamp)
             
-            # Skip comparison data generation for faster initial load
-            if st.session_state.show_comparison and st.session_state.comparison_data is None:
-                st.session_state.comparison_data = "loading"
-                add_log_message(st.session_state.summary_log_messages, "info", "Comparison analysis will be available after refresh")
+            # Generate comparison data if enabled
+            if st.session_state.show_comparison:
+                all_durations = list(SUMMARY_DURATIONS_DATA.keys())
+                try:
+                    st.session_state.comparison_data = generate_team_comparison_data(
+                        jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages
+                    )
+                    add_log_message(st.session_state.summary_log_messages, "info", "Comparison data generated successfully")
+                except Exception as e:
+                    add_log_message(st.session_state.summary_log_messages, "error", f"Failed to generate comparison data: {e}")
+                    st.session_state.comparison_data = None
 
             if team_metrics is not None:
                 df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)

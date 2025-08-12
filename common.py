@@ -518,6 +518,10 @@ def parse_date(dt):
 
 def get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date):
     total_logged_seconds = 0
+    
+    if not sprint_end_date:
+        return 0
+        
     start_dt, end_dt = parse_date(sprint_start_date), parse_date(sprint_end_date).replace(hour=23, minute=59, second=59)
 
     for history in histories:
