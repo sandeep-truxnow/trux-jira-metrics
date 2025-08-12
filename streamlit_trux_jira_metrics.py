@@ -190,8 +190,18 @@ with st.sidebar:
     # st.markdown("---")
 
     with st.expander("Detailed Report"):
-        st.markdown("Report Thresholds")
+        # st.markdown("Report Thresholds")
         # st.markdown("<span style='color:red'>Report Thresholds</span>", unsafe_allow_html=True)
+
+        with st.expander("Report Thresholds", expanded=False):
+            def on_threshold_change():
+                pass
+                
+            cycle_time_threshold_days = st.slider("Cycle Time Threshold (days)", min_value=1, max_value=30, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
+            lead_time_threshold_days = st.slider("Lead Time Threshold (days)", min_value=1, max_value=60, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
+            
+        cycle_threshold_hours = cycle_time_threshold_days * 24
+        lead_threshold_hours = lead_time_threshold_days * 24
 
         team_names_display = list(TEAMS_DATA.keys())
         current_team_name_for_selector = st.session_state.selected_team_name
@@ -214,10 +224,10 @@ with st.sidebar:
         def on_threshold_change():
             pass
             
-        cycle_time_threshold_days = st.number_input("Cycle Time Threshold (days)", min_value=1, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
-        lead_time_threshold_days = st.number_input("Lead Time Threshold (days)", min_value=1, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
-        cycle_threshold_hours = cycle_time_threshold_days * 24
-        lead_threshold_hours = lead_time_threshold_days * 24
+        # cycle_time_threshold_days = st.number_input("Cycle Time Threshold (days)", min_value=1, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
+        # lead_time_threshold_days = st.number_input("Lead Time Threshold (days)", min_value=1, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
+        # cycle_threshold_hours = cycle_time_threshold_days * 24
+        # lead_threshold_hours = lead_time_threshold_days * 24
 
         detailed_duration_names = list(DETAILED_DURATIONS_DATA.keys())
         current_detailed_duration_name_for_selector = st.session_state.selected_detailed_duration_name
@@ -340,15 +350,17 @@ with tab_detailed:
     
     if st.session_state.detailed_data is not None:
         common_message = "This report is filtered and excludes sub-tasks"
-        status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'QA Complete', 'Released', or 'Closed'."
+        status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'Done', 'QA Complete', 'In UAT', 'Ready for Release', 'Released', 'Closed'"
         
-        # Show info message
+        # Show info messages
         if st.session_state.selected_detailed_duration_name == "Current Sprint":
             st.info(f"ℹ️ {common_message}.")
         elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
             st.info(f"ℹ️ {status_message}.")
         else:
             st.info(f"ℹ️ {status_message}.")
+        
+        st.info(f"ℹ️ **Report Thresholds:** Cycle Time > {cycle_time_threshold_days} days and Lead Time > {lead_time_threshold_days} days are highlighted as exceeding thresholds.")
         
         from report_detailed import generated_report_df_display
         generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.detailed_log_messages)
