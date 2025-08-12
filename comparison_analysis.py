@@ -136,7 +136,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
         completion_df = create_team_performance_comparison(comparison_data, teams_data)
         if completion_df is not None:
             if selected_duration in completion_df.columns:
-                styled_df = completion_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = completion_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 styled_df = styled_df.set_properties(subset=[col for col in completion_df.columns if '%' in str(completion_df[col].iloc[0]) if len(completion_df) > 0], **{'text-align': 'right'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
@@ -155,7 +155,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
         )
         if issues_df is not None:
             if selected_duration in issues_df.columns:
-                styled_df = issues_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = issues_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(issues_df, hide_index=True, use_container_width=True)
@@ -170,7 +170,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
             for col in story_points_df.columns[1:]:
                 story_points_df[col] = story_points_df[col].round(0).astype(int)
             if selected_duration in story_points_df.columns:
-                styled_df = story_points_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = story_points_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(story_points_df, hide_index=True, use_container_width=True)
@@ -182,7 +182,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
         )
         if bugs_df is not None:
             if selected_duration in bugs_df.columns:
-                styled_df = bugs_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = bugs_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(bugs_df, hide_index=True, use_container_width=True)
@@ -197,7 +197,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
             for col in sprint_hours_df.columns[1:]:
                 sprint_hours_df[col] = sprint_hours_df[col].round(0).astype(int)
             if selected_duration in sprint_hours_df.columns:
-                styled_df = sprint_hours_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = sprint_hours_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(sprint_hours_df, hide_index=True, use_container_width=True)
@@ -209,7 +209,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
         )
         if scope_changes_df is not None:
             if selected_duration in scope_changes_df.columns:
-                styled_df = scope_changes_df.style.set_properties(subset=[selected_duration], **{'background-color': '#fff2cc'})
+                styled_df = scope_changes_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
                 st.dataframe(scope_changes_df, hide_index=True, use_container_width=True)

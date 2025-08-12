@@ -27,11 +27,55 @@ SUMMARY_DURATIONS_DATA = OrderedDict([
     ("Current Sprint", "openSprints()")
 ])
 
+# st.markdown(
+#     """
+#     <style>
+#     .stApp {
+#         background-color: #f0f8ff; /* Light blue */
+#     }
+#     </style>
+#     """,
+#     unsafe_allow_html=True
+# )
+
+# Theme-aware CSS for both light and dark modes
 st.markdown(
     """
     <style>
-    .stApp {
-        background-color: #f0f8ff; /* Light blue */
+    /* Dark theme styles */
+    @media (prefers-color-scheme: dark) {
+        .stApp > div:first-child {
+            background-color: #0e1117 !important;
+        }
+        .main .block-container {
+            background-color: #0e1117 !important;
+            color: #fafafa !important;
+        }
+        .stMarkdown, .stText {
+            color: #fafafa !important;
+        }
+        div[data-testid="stDataFrame"] {
+            background-color: #262730 !important;
+        }
+        div[data-testid="stDataFrame"] table {
+            background-color: #262730 !important;
+            color: #fafafa !important;
+        }
+    }
+    
+    /* Light theme styles */
+    @media (prefers-color-scheme: light) {
+        .stApp > div:first-child {
+            background-color: #ffffff !important;
+        }
+        .main .block-container {
+            background-color: #ffffff !important;
+            color: #262730 !important;
+        }
+        div[data-testid="stDataFrame"] table {
+            background-color: #ffffff !important;
+            color: #262730 !important;
+        }
     }
     </style>
     """,
@@ -468,10 +512,14 @@ if generate_summary_button:
                             styles.append('')
                     return styles
 
-                # Apply styles
+                # Apply styles with theme-aware colors
                 styled_summary_df = (
                     df_jira_metrics.style
-                    .apply(style_rows, axis=1)
+                    .apply(lambda row: [
+                        'font-weight: bold; background-color: rgba(0, 123, 255, 0.2); border-top: 2px solid rgba(0, 123, 255, 0.5)' if row.name == df_jira_metrics.index[-1]
+                        else 'background-color: rgba(128, 128, 128, 0.1)' if row.name % 2 == 0
+                        else '' for _ in row
+                    ], axis=1)
                     .set_table_styles([
                         {'selector': 'th', 'props': [('font-weight', 'bold')]},
                         {'selector': 'table', 'props': [('width', '100%'), ('table-layout', 'fixed')]},
