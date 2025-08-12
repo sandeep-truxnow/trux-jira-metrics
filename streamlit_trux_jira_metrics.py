@@ -27,7 +27,16 @@ SUMMARY_DURATIONS_DATA = OrderedDict([
     ("Current Sprint", "openSprints()")
 ])
 
-
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #f0f8ff; /* Light blue */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Set Streamlit page configuration
 st.set_page_config(
