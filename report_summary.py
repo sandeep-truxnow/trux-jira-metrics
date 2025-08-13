@@ -75,7 +75,7 @@ def _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, t
         sprint_start_datetime = datetime.combine(sprint_start_date, datetime.min.time()).replace(tzinfo=ZoneInfo('America/New_York'))
         return sprint_start_datetime, sprint_start_date, None
 
-def _calculate_team_metrics(all_metrics):
+def _calculate_team_metrics(team_name, all_metrics):
     total_issues = len(all_metrics)
     total_story_points = sum(issue['story_points'] for issue in all_metrics)
     total_issues_closed = sum(issue['issues_closed'] for issue in all_metrics)
@@ -90,9 +90,22 @@ def _calculate_team_metrics(all_metrics):
     total_added_issues = sum(issue['added_to_sprint'] for issue in all_metrics)
     total_removed_issues = sum(issue['removed_from_sprint'] for issue in all_metrics)
     
-    completed_stories = [issue for issue in all_metrics if issue['issues_closed'] > 0 and issue['completion_time_days'] > 0]
-    avg_completion_days = sum(issue['completion_time_days'] for issue in completed_stories) / len(completed_stories) if completed_stories else 0
-    avg_sprints_per_story = sum(issue['sprint_count'] for issue in all_metrics) / len(all_metrics) if all_metrics else 0
+    completed_stories = [issue for issue in all_metrics if issue['issues_closed'] > 0 and issue['completion_time_days'] >= 0]
+    # for issue in all_metrics:
+    #     print(f"DEBUG: {team_name} - Issue: {issue['key']}, Completed: {issue['issues_closed'] > 0}, Completion Days: {issue['completion_time_days']}")
+    # print(f"DEBUG: {team_name} - Completed stories: {completed_stories}")
+    if completed_stories:
+        completion_days_list = [issue['completion_time_days'] for issue in completed_stories]
+        # print(f"DEBUG: {team_name} - Completion days for completed stories: {completion_days_list}")
+        total_days = sum(completion_days_list)
+        avg_completion_days = total_days / len(completed_stories)
+        # print(f"DEBUG: Total days: {total_days}, Count: {len(completed_stories)}, Average: {avg_completion_days}")
+    else:
+        avg_completion_days = 0
+    
+    # Calculate avg sprints per story only for completed stories
+    completed_stories_for_sprints = [issue for issue in all_metrics if issue['issues_closed'] > 0]
+    avg_sprints_per_story = sum(issue['sprint_count'] for issue in completed_stories_for_sprints) / len(completed_stories_for_sprints) if completed_stories_for_sprints else 0
     percent_work_complete = round((total_issues_closed / total_issues) * 100, 2) if total_issues else 0
     
     return {
@@ -113,7 +126,7 @@ def _calculate_team_metrics(all_metrics):
         SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues}/-{total_removed_issues}"
     }
 
-def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, teams_data, log_list, scope_hours=None):
+def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, teams_data, log_list, scope_hours):
     jira_url, jira_username, jira_api_token = jira_conn_details
     team_metrics = {}
 
@@ -141,7 +154,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             all_metrics = []
         
         append_log(log_list, "info", f"Team {team_name} processed {len(all_metrics)} metrics from {len(issues)} issues")
-        return team_id, _calculate_team_metrics(all_metrics)
+        return team_id, _calculate_team_metrics(team_name, all_metrics)
 
     # Run all teams in parallel
     import streamlit as st
