@@ -15,7 +15,7 @@ SUMMARY_COLUMNS = {
     'TOTAL_ISSUES': 'Total Issues', 
     'STORY_POINTS': 'Story Points',
     'ISSUES_COMPLETED': 'Issues Completed',
-    'PERCENT_COMPLETED': 'Completion %',
+    'STORY_POINTS_BURNT': 'Story Points Burnt',
     'SPRINT_HOURS': 'Sprint Hrs',
     'ALL_TIME_HOURS': 'All Time Hrs',
     'BUGS': 'Bugs',
@@ -75,9 +75,10 @@ def _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, t
         sprint_start_datetime = datetime.combine(sprint_start_date, datetime.min.time()).replace(tzinfo=ZoneInfo('America/New_York'))
         return sprint_start_datetime, sprint_start_date, None
 
-def _calculate_team_metrics(team_name, all_metrics):
+def _calculate_team_metrics(all_metrics):
     total_issues = len(all_metrics)
     total_story_points = sum(issue['story_points'] for issue in all_metrics)
+    total_story_points_burnt = sum(issue['story_points_burnt'] for issue in all_metrics)
     total_issues_closed = sum(issue['issues_closed'] for issue in all_metrics)
     total_sprint_hours = sum(issue['sprint_hours'] for issue in all_metrics)
     total_all_time_hours = sum(issue['all_time_hours'] for issue in all_metrics)
@@ -108,11 +109,19 @@ def _calculate_team_metrics(team_name, all_metrics):
     avg_sprints_per_story = sum(issue['sprint_count'] for issue in completed_stories_for_sprints) / len(completed_stories_for_sprints) if completed_stories_for_sprints else 0
     percent_work_complete = round((total_issues_closed / total_issues) * 100, 2) if total_issues else 0
     
+    # Calculate percentages
+    issues_completed_percent = round((total_issues_closed / total_issues) * 100) if total_issues > 0 else 0
+    story_points_burnt_percent = round((total_story_points_burnt / total_story_points) * 100) if total_story_points > 0 else 0
+    
+    # Format with percentages
+    issues_completed_display = f"{total_issues_closed} ({issues_completed_percent}%)"
+    story_points_burnt_display = f"{total_story_points_burnt} ({story_points_burnt_percent}%)"
+    
     return {
         SUMMARY_COLUMNS['TOTAL_ISSUES']: total_issues,
         SUMMARY_COLUMNS['STORY_POINTS']: total_story_points,
-        SUMMARY_COLUMNS['ISSUES_COMPLETED']: total_issues_closed,
-        SUMMARY_COLUMNS['PERCENT_COMPLETED']: percent_work_complete,
+        SUMMARY_COLUMNS['ISSUES_COMPLETED']: issues_completed_display,
+        SUMMARY_COLUMNS['STORY_POINTS_BURNT']: story_points_burnt_display,
         SUMMARY_COLUMNS['SPRINT_HOURS']: seconds_to_hours(total_sprint_hours),
         SUMMARY_COLUMNS['ALL_TIME_HOURS']: seconds_to_hours(total_all_time_hours),
         SUMMARY_COLUMNS['BUGS']: total_bugs,
@@ -154,7 +163,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             all_metrics = []
         
         append_log(log_list, "info", f"Team {team_name} processed {len(all_metrics)} metrics from {len(issues)} issues")
-        return team_id, _calculate_team_metrics(team_name, all_metrics)
+        return team_id, _calculate_team_metrics(all_metrics)
 
     # Run all teams in parallel
     import streamlit as st
@@ -282,8 +291,8 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             team_name,
             metrics.get(SUMMARY_COLUMNS['TOTAL_ISSUES'], 0),
             metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0),
-            metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], 0),
-            metrics.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)"),
+            metrics.get(SUMMARY_COLUMNS['STORY_POINTS_BURNT'], "0 (0%)"),
             metrics.get(SUMMARY_COLUMNS['SPRINT_HOURS'], 0.0),
             metrics.get(SUMMARY_COLUMNS['ALL_TIME_HOURS'], 0.0),
             metrics.get(SUMMARY_COLUMNS['BUGS'], 0),
@@ -304,14 +313,14 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     # add total to each column, for the Teams Column, show label as Total
     total_row = df.select_dtypes(include='number').sum(numeric_only=True)
     
-    # Calculate average for Completion % and keep as numeric
-    completion_percentages = [row[4] for row in rows if rows]
-    avg_percent = np.mean(completion_percentages) if completion_percentages else 0
-    total_row["Completion %"] = avg_percent
+    # No longer need separate completion percentage calculation
 
-    # Calculate sum of scope changes for Grand Total
+    # Calculate sums and averages for Grand Total
     total_added = 0
     total_removed = 0
+    total_issues_completed_sum = 0
+    total_story_points_burnt_sum = 0
+    
     for team_id, metrics in team_metrics.items():
         scope_changes = metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0/-0")
         # Parse the "+X/-Y" format
@@ -321,7 +330,25 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             removed = int(parts[1])
             total_added += added
             total_removed += removed
+            
+        # Parse issues completed "X (Y%)" format
+        issues_completed_str = metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)")
+        if " (" in issues_completed_str:
+            completed_issues = int(issues_completed_str.split(" (")[0])
+            total_issues_completed_sum += completed_issues
+            
+        # Parse story points burnt "X (Y%)" format
+        story_points_burnt_str = metrics.get(SUMMARY_COLUMNS['STORY_POINTS_BURNT'], "0 (0%)")
+        if " (" in story_points_burnt_str:
+            burnt_points = float(story_points_burnt_str.split(" (")[0])
+            total_story_points_burnt_sum += burnt_points
     
+    # Calculate grand total percentages
+    grand_total_issues_percent = round((total_issues_completed_sum / total_row["Total Issues"]) * 100) if total_row["Total Issues"] > 0 else 0
+    grand_total_burnt_percent = round((total_story_points_burnt_sum / total_row["Story Points"]) * 100) if total_row["Story Points"] > 0 else 0
+    
+    total_row["Issues Completed"] = f"{total_issues_completed_sum} ({grand_total_issues_percent}%)"
+    total_row["Story Points Burnt"] = f"{total_story_points_burnt_sum} ({grand_total_burnt_percent}%)"
     total_row["Scope Changes (Issues)"] = f"+{total_added}/-{total_removed}"
 
     # Add 'Teams' label
@@ -451,6 +478,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
     sprint_start_date = sprint_start_datetime.date() if hasattr(sprint_start_datetime, 'date') else sprint_start_datetime
     bug_count, bugs_time_sprint, bugs_time_all = _process_bug_metrics(issue_type, histories, sprint_start_date, sprint_end_date)
     issues_closed = 1 if status.lower() in [status.lower() for status in CLOSED_ISSUE_STATUSES] else 0
+    story_points_burnt = story_points if issues_closed > 0 else 0
     failed_qa_count = count_transitions(histories, "In Testing", "Rejected") or 0
     worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
     total_all_time = get_logged_time(histories)
@@ -470,6 +498,7 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
         "key": key,
         "story_points": story_points, 
         "issues_closed": issues_closed,
+        "story_points_burnt": story_points_burnt,
         "sprint_hours": worked_time_sprint,   
         "all_time_hours": total_all_time,
         "bug_count": bug_count,

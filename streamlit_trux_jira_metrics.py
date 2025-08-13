@@ -364,6 +364,7 @@ if st.session_state.user_authenticated:
                 - **Total Issues**: Total number of issues assigned to the team
                 - **Story Points**: Sum of story points for all issues
                 - **Issues Completed**: Issues with status: "Done", "QA Complete", "In UAT", "Ready for Release", "Released", or "Closed"
+                - **Story Points Burnt**: Story points completed with percentage of total (e.g., "5 (20%)")
                 - **% Complete**: Percentage of completed issues out of total issues
                 - **Hours Worked**: Time logged during the current sprint period (in hours)
                 - **All Time**: Total time logged across all sprints for these issues (in hours)
@@ -436,18 +437,26 @@ if st.session_state.user_authenticated:
         else:
             header_title = f"Leading Indicators - Previous Sprint - {sprint_name}"
 
+        # Calculate time elapsed percentage
+        if st.session_state.selected_summary_duration_name == "Current Sprint":
+            total_sprint_days = (sprint_end_date - sprint_start_date).days
+            elapsed_days = (date.today() - sprint_start_date).days
+            time_elapsed_percent = round((elapsed_days / total_sprint_days) * 100) if total_sprint_days > 0 else 0
+        else:
+            time_elapsed_percent = 100
+        
         # Build header HTML conditionally
         days_remaining_html = ""
         if st.session_state.selected_summary_duration_name == "Current Sprint":
             days_diff = np.busday_count(date.today(), sprint_end_date)
-            days_remaining_html = f'<div><strong>Days Remaining:</strong> {days_diff}</div>'
+            days_remaining_html = f'<div><strong>{days_diff} Days left</strong> </div>'
         
         header_html = f"""
         <h3>{header_title}</h3>
         <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
             <div><strong>Today:</strong> {date.today().strftime('%d-%b-%Y')}</div>
-            <div><strong>Sprint Start Date:</strong> {sprint_start_date.strftime('%d-%b-%Y')}</div>
-            <div><strong>Sprint End Date:</strong> {sprint_end_date.strftime('%d-%b-%Y')}</div>
+            <div><strong>Sprint Start Date:</strong> {sprint_start_date.strftime('%d-%b-%Y')} | Sprint End Date:</strong> {sprint_end_date.strftime('%d-%b-%Y')}</div>
+            <div><strong><strong>Time Elapsed:</strong> {time_elapsed_percent}% | <strong>Work Complete:</strong> 0%</div>
             {days_remaining_html}
         </div>
         <hr>
@@ -488,7 +497,16 @@ if st.session_state.user_authenticated:
                         st.session_state.comparison_data = None
 
                 if team_metrics is not None:
+                    # Calculate work complete percentage from grand total
                     df_jira_metrics = generated_summary_report_df_display(team_metrics, TEAMS_DATA)
+                    grand_total_row = df_jira_metrics[df_jira_metrics["Teams"] == "Grand Total"]
+                    if not grand_total_row.empty:
+                        issues_completed_str = grand_total_row["Issues Completed"].iloc[0]
+                        if " (" in issues_completed_str and "%" in issues_completed_str:
+                            work_complete_percent = int(issues_completed_str.split("(")[1].split("%")[0])
+                            # Update header with actual work complete percentage
+                            header_html = header_html.replace("Work Complete:</strong> 0%", f"Work Complete:</strong> {work_complete_percent}%")
+                            st.session_state.summary_header = header_html
 
                     # Separate Grand Total row and sort only team rows
                     grand_total_row = df_jira_metrics[df_jira_metrics["Teams"] == "Grand Total"]
