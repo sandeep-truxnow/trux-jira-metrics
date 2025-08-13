@@ -126,12 +126,12 @@ def highlight_breached_durations_ui(s, cycle_threshold_hours, lead_threshold_hou
         if "Cycle Time" in s.index:
             cycle_col_idx = s.index.get_loc("Cycle Time")
             if cycle_time_hours is not None and cycle_time_hours > cycle_threshold_hours:
-                styles[cycle_col_idx] = 'background-color: #FFD580' # Orange
+                styles[cycle_col_idx] = 'background-color: rgba(255, 152, 0, 0.3)' # Orange with transparency
         
         if "Lead Time" in s.index:
             lead_col_idx = s.index.get_loc("Lead Time")
             if lead_time_hours is not None and lead_time_hours > lead_threshold_hours:
-                styles[lead_col_idx] = 'background-color: #FFD580' # Orange
+                styles[lead_col_idx] = 'background-color: rgba(255, 152, 0, 0.3)' # Orange with transparency
     except KeyError:
         pass
 
@@ -159,8 +159,8 @@ def apply_workflow_heatmap_ui(s):
             hours = duration_to_hours(s.get(col_name))
             if hours is not None:
                 intensity = (hours - min_val) / delta
-                hex_color = calculate_heatmap_color(intensity)
-                styles[col_idx] = f'background-color: #{hex_color[2:]}'
+                rgba_color = calculate_heatmap_color(intensity)
+                styles[col_idx] = f'background-color: {rgba_color}'
     return styles
 
 def apply_story_points_gradient_ui(s, min_sp_data, max_sp_data):
@@ -181,26 +181,21 @@ def apply_story_points_gradient_ui(s, min_sp_data, max_sp_data):
                 normalized_value = (sp_value - min_sp_data) / delta_sp
                 normalized_value = max(0, min(1, normalized_value))
                 
-                hex_color = calculate_heatmap_color_blue_gradient(normalized_value)
-                styles[idx] = f'background-color: #{hex_color[2:]}'
+                rgba_color = calculate_heatmap_color_blue_gradient(normalized_value)
+                styles[idx] = f'background-color: {rgba_color}'
         except ValueError:
             pass
     return styles
 
 def calculate_heatmap_color(intensity):
-    r = 255; g = int(200 - 120 * intensity); b = int(200 - 120 * intensity)
-    r = max(0, min(255, r)); g = max(0, min(255, g)); b = max(0, min(255, b))
-    return f"FF{r:02X}{g:02X}{b:02X}"
+    # Use red with transparency for better theme compatibility
+    alpha = 0.2 + (intensity * 0.4)  # 0.2 to 0.6 transparency
+    return f"rgba(244, 67, 54, {alpha:.2f})"  # Red with variable transparency
 
 def calculate_heatmap_color_blue_gradient(intensity):
-    r_start, g_start, b_start = (230, 240, 250)
-    r_end, g_end, b_end = (21, 101, 192)
-
-    r = int(r_start + (r_end - r_start) * intensity)
-    g = int(g_start + (g_end - g_start) * intensity)
-    b = int(b_start + (b_end - b_start) * intensity)
-    
-    return f"FF{r:02X}{g:02X}{b:02X}"
+    # Use blue with transparency for better theme compatibility
+    alpha = 0.2 + (intensity * 0.4)  # 0.2 to 0.6 transparency
+    return f"rgba(33, 150, 243, {alpha:.2f})"  # Blue with variable transparency
 
 
 def generate_detailed_report(jira_conn_details, jql_query, selected_team_name, log_list):
@@ -293,9 +288,9 @@ def apply_story_points_gradient(styled_df, story_points_column):
 
         if max_sp_data == min_sp_data:
             single_color_val = max(0, min(1, (min_sp_data - 1) / 20.0))
-            single_hex = calculate_heatmap_color_blue_gradient(single_color_val)
+            single_rgba = calculate_heatmap_color_blue_gradient(single_color_val)
             styled_df = styled_df.apply(
-                lambda s_col: [f'background-color: #{single_hex[2:]}'] * len(s_col),
+                lambda s_col: [f'background-color: {single_rgba}'] * len(s_col),
                 subset=["Story Points"]
             )
         else:
@@ -348,15 +343,15 @@ def display_legend():
             }
             </style>
             <div class="legend-item">
-                <div class="color-box" style="background-color: #FFD580;"></div>
+                <div class="color-box" style="background-color: rgba(255, 152, 0, 0.5);"></div>
                 <span>Cycle Time / Lead Time > threshold</span>
             </div>
             <div class="legend-item">
-                <div class="color-box" style="background-color: #1565C0;"></div>
+                <div class="color-box" style="background-color: rgba(33, 150, 243, 0.5);"></div>
                 <span>Story Points: Light → Dark Blue (low → high)</span>
             </div>
             <div class="legend-item">
-                <div class="color-box" style="background-color: #FF6666;"></div>
+                <div class="color-box" style="background-color: rgba(244, 67, 54, 0.5);"></div>
                 <span>Workflow: Light → Dark Red (per row, if breached)</span>
             </div>
             """, unsafe_allow_html=True
