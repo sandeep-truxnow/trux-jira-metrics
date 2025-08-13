@@ -2,3 +2,5 @@ sdash@truxnow.com|grant
 kmasden@truxnow.com|grant
 robes@truxnow.com|grant
 jdavoren@truxnow.com|grant
+shantanu@truxnow.com|deny
+sbandgar@truxnow.com|deny

@@ -382,7 +382,7 @@ if st.session_state.user_authenticated:
                 - **Teams**: Team name
                 - **Total Issues**: Total number of issues assigned to the team
                 - **Story Points**: Sum of story points for all issues
-                - **Issues Completed**: Issues with status: "Done", "QA Complete", "Released", or "Closed"
+                - **Issues Completed**: Issues with status: "Done", "QA Complete", "In UAT", "Ready for Release", "Released", or "Closed"
                 - **% Complete**: Percentage of completed issues out of total issues
                 - **Hours Worked**: Time logged during the current sprint period (in hours)
                 - **All Time**: Total time logged across all sprints for these issues (in hours)
@@ -411,8 +411,8 @@ if st.session_state.user_authenticated:
             st.info("Click 'Generate Summary Report' to view the summary data.")
         
         # Show comparison toggle even when no data
-        if st.session_state.show_comparison:
-            st.info("Enable comparison analysis by generating a summary report first.")
+    if st.session_state.show_comparison:
+        st.info("Enable comparison analysis by generating a summary report first.")
 
         with tab_detailed:
             if st.session_state.detailed_header is not None:
