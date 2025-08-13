@@ -219,18 +219,7 @@ if st.session_state.user_authenticated:
                     
                     # Generate comparison data if enabled
                     if st.session_state.show_comparison:
-                        jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.summary_log_messages)
-                        if jira_conn_details:
-                            with st.spinner("Generating comparison data across all durations..."):
-                                all_durations = list(SUMMARY_DURATIONS_DATA.keys())
-                                try:
-                                    st.session_state.comparison_data = generate_team_comparison_data(
-                                        jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages, st.session_state.scope_time_range
-                                    )
-                                    add_log_message(st.session_state.summary_log_messages, "info", "Comparison data generated successfully")
-                                except Exception as e:
-                                    add_log_message(st.session_state.summary_log_messages, "error", f"Failed to generate comparison data: {e}")
-                                    st.session_state.comparison_data = None
+                        st.session_state.comparison_data = "loading"
                 else:
                     pass
             
@@ -245,14 +234,6 @@ if st.session_state.user_authenticated:
                 on_change=on_comparison_toggle_change,
                 help="Compare teams across different durations"
             )
-            
-            # def get_scope_changes_from_summary(time_hours):
-            #     """Get actual scope changes from summary report data."""
-            #     if st.session_state.summary_data is not None:
-            #         # Extract scope changes from summary data based on time_hours
-            #         # This will be populated from actual Jira data
-            #         return 0, 0  # Placeholder - will be replaced with actual data
-            #     return 0, 0
             
             scope_time_range = st.slider(
                 "Scope Change Time Range (hours)",
@@ -411,8 +392,8 @@ if st.session_state.user_authenticated:
             st.info("Click 'Generate Summary Report' to view the summary data.")
         
         # Show comparison toggle even when no data
-    if st.session_state.show_comparison:
-        st.info("Enable comparison analysis by generating a summary report first.")
+        # if st.session_state.show_comparison:
+        #     st.info("Enable comparison analysis by generating a summary report first.")
 
         with tab_detailed:
             if st.session_state.detailed_header is not None:
@@ -454,6 +435,12 @@ if st.session_state.user_authenticated:
             header_title = f"Leading Indicators - Current Sprint - {sprint_name}"
         else:
             header_title = f"Leading Indicators - Previous Sprint - {sprint_name}"
+
+        # Build header HTML conditionally
+        days_remaining_html = ""
+        if st.session_state.selected_summary_duration_name == "Current Sprint":
+            days_diff = np.busday_count(date.today(), sprint_end_date)
+            days_remaining_html = f'<div><strong>Days Remaining:</strong> {days_diff}</div>'
         
         header_html = f"""
         <h3>{header_title}</h3>
@@ -461,6 +448,7 @@ if st.session_state.user_authenticated:
             <div><strong>Today:</strong> {date.today().strftime('%d-%b-%Y')}</div>
             <div><strong>Sprint Start Date:</strong> {sprint_start_date.strftime('%d-%b-%Y')}</div>
             <div><strong>Sprint End Date:</strong> {sprint_end_date.strftime('%d-%b-%Y')}</div>
+            {days_remaining_html}
         </div>
         <hr>
         """
