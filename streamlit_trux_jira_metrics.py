@@ -355,61 +355,62 @@ if st.session_state.user_authenticated:
 
     #### Summary Tab - START    ####
     with tab_summary:
-        if st.session_state.summary_header is not None:
-            st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
+        with st.expander("📊 Summary Report", expanded=True):
+            if st.session_state.summary_header is not None:
+                st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
+            
+            if st.session_state.summary_data is not None:
+                st.info("ℹ️ This report is filtered and excludes sub-tasks.")
+                st.dataframe(
+                    st.session_state.summary_data, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Teams": st.column_config.TextColumn(
+                            "Teams",
+                            pinned="left"
+                        ),
+                        "Completion %": st.column_config.NumberColumn(
+                            "Completion %",
+                            format="%.0f%%"
+                        )
+                    }
+                )
+            
+                # Add collapsible legend below the summary table
+                with st.expander("📋 Column Definitions", expanded=False):
+                    st.markdown("""
+                    - **Teams**: Team name
+                    - **Total Issues**: Total number of issues assigned to the team
+                    - **Story Points**: Sum of story points for all issues
+                    - **Issues Completed**: Issues with status: "Done", "QA Complete", "In UAT", "Ready for Release", "Released", or "Closed"
+                    - **Story Points Burnt**: Story points completed with percentage of total (e.g., "5 (20%)")
+                    - **% Complete**: Percentage of completed issues out of total issues
+                    - **Hours Worked**: Time logged during the current sprint period (in hours)
+                    - **All Time**: Total time logged across all sprints for these issues (in hours)
+                    - **Bugs**: Number of issues with type "Bug"
+                    - **Failed QA Count**: Number of times issues transitioned from "In Testing" to "Rejected"
+                    - **Spillover Issues**: Issues that span multiple sprints
+                    - **Spillover Story Points**: Story points from issues that span multiple sprints
+                    - **Avg Completion Days**: Average number of days from issue creation to completion
+                    - **Avg Sprints/Story**: Average number of sprints per story for completed issues
+                    - **Scope Changes**: Issues added (+) or removed (-) from sprint within selected time range after sprint start
+                    
+                    """)
+            else:
+                st.info("Click 'Generate Summary Report' to view the summary data.")
         
-        if st.session_state.summary_data is not None:
-            st.info("ℹ️ This report is filtered and excludes sub-tasks.")
-            st.dataframe(
-                st.session_state.summary_data, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "Teams": st.column_config.TextColumn(
-                        "Teams",
-                        pinned="left"
-                    ),
-                    "Completion %": st.column_config.NumberColumn(
-                        "Completion %",
-                        format="%.0f%%"
-                    )
-                }
-            )
-        
-            # Add collapsible legend below the summary table
-            with st.expander("📋 Column Definitions", expanded=False):
-                st.markdown("""
-                - **Teams**: Team name
-                - **Total Issues**: Total number of issues assigned to the team
-                - **Story Points**: Sum of story points for all issues
-                - **Issues Completed**: Issues with status: "Done", "QA Complete", "In UAT", "Ready for Release", "Released", or "Closed"
-                - **Story Points Burnt**: Story points completed with percentage of total (e.g., "5 (20%)")
-                - **% Complete**: Percentage of completed issues out of total issues
-                - **Hours Worked**: Time logged during the current sprint period (in hours)
-                - **All Time**: Total time logged across all sprints for these issues (in hours)
-                - **Bugs**: Number of issues with type "Bug"
-                - **Failed QA Count**: Number of times issues transitioned from "In Testing" to "Rejected"
-                - **Spillover Issues**: Issues that span multiple sprints
-                - **Spillover Story Points**: Story points from issues that span multiple sprints
-                - **Avg Completion Days**: Average number of days from issue creation to completion
-                - **Avg Sprints/Story**: Average number of sprints per story for completed issues
-                - **Scope Changes**: Issues added (+) or removed (-) from sprint within selected time range after sprint start
-                
-                """)
-        
-            # Display comparison analysis if enabled
-            if st.session_state.show_comparison:
+        # Display comparison analysis if enabled
+        if st.session_state.show_comparison:
+            with st.expander("📈 Team Comparison Analysis", expanded=True):
                 if st.session_state.comparison_data == "loading":
                     st.info("📊 Team comparison analysis will be available after clicking refresh")
                 elif st.session_state.comparison_data and isinstance(st.session_state.comparison_data, dict):
-                    st.markdown("---")
                     display_comparison_analysis(
                         st.session_state.comparison_data, 
                         TEAMS_DATA, 
                         st.session_state.selected_summary_duration_name
                     )
-        else:
-            st.info("Click 'Generate Summary Report' to view the summary data.")
 
 
     #### Detailed Tab - START    ####
@@ -543,7 +544,7 @@ if st.session_state.user_authenticated:
                     styled_summary_df = (
                         df_jira_metrics.style
                         .apply(lambda row: [
-                            'font-weight: bold; background-color: rgba(0, 123, 255, 0.2); border-top: 2px solid rgba(0, 123, 255, 0.5)' if row.name == df_jira_metrics.index[-1]
+                            'font-weight: bold; background-color: rgba(173, 216, 230, 0.4); border-top: 3px solid rgba(173, 216, 230, 0.4);' if row.name == df_jira_metrics.index[-1]
                             else 'background-color: rgba(128, 128, 128, 0.1)' if row.name % 2 == 0
                             else '' for _ in row
                         ], axis=1)
