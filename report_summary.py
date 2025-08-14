@@ -72,7 +72,7 @@ def _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, t
         sprint_start_datetime = datetime.combine(sprint_start_date, datetime.min.time()).replace(tzinfo=ZoneInfo('America/New_York'))
         return sprint_start_datetime, sprint_start_date, None
 
-def _calculate_team_metrics(team_name, all_metrics):
+def _calculate_team_metrics(all_metrics):
     total_issues = len(all_metrics)
     total_story_points = sum(issue['story_points'] for issue in all_metrics)
     total_story_points_burnt = sum(issue['story_points_burnt'] for issue in all_metrics)
@@ -99,10 +99,10 @@ def _calculate_team_metrics(team_name, all_metrics):
 
     if completed_stories:
         completion_days_list = [issue['completion_time_days'] for issue in completed_stories]
-        print(f"DEBUG: {team_name} - Completion days for completed stories: {completion_days_list}")
+        # print(f"DEBUG: {team_name} - Completion days for completed stories: {completion_days_list}")
         total_days = sum(completion_days_list)
         avg_completion_days = total_days / len(completed_stories)
-        print(f"DEBUG: Total days: {total_days}, Count: {len(completed_stories)}, Average: {avg_completion_days}")
+        # print(f"DEBUG: {team_name} - Total days: {total_days}, Count: {len(completed_stories)}, Average: {avg_completion_days}")
     else:
         avg_completion_days = 0
     
@@ -119,7 +119,7 @@ def _calculate_team_metrics(team_name, all_metrics):
     issues_completed_display = f"{total_issues_closed} ({issues_completed_percent}%)"
     story_points_burnt_display = f"{round(total_story_points_burnt)} ({story_points_burnt_percent}%)"
     spillover_combined = f"{int(total_spillover_issues)} ({total_spillover_points})"
-    print(f"DEBUG: {team_name} - Formatted spillover: {spillover_combined}")
+    # print(f"DEBUG: {team_name} - Formatted spillover: {spillover_combined}")
     hours_combined = f"{round(seconds_to_hours(total_sprint_hours))} / {round(seconds_to_hours(total_all_time_hours))}"
     bug_hours_combined = f"{round(seconds_to_hours(bugs_hours_in_current_sprint))} / {round(seconds_to_hours(total_all_time_bugs_hours))}"
     
@@ -133,9 +133,13 @@ def _calculate_team_metrics(team_name, all_metrics):
         SUMMARY_COLUMNS['BUGS']: total_bugs,
         SUMMARY_COLUMNS['BUG_HOURS_COMBINED']: bug_hours_combined,
 	    SUMMARY_COLUMNS['AVG_COMPLETION_DAYS']: round(avg_completion_days),
-        SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story),
+        SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story, 1),
         SUMMARY_COLUMNS['SPILLOVER_ISSUES_SPS']: spillover_combined,        
-        SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues}/-{total_removed_issues}"
+        SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues}/-{total_removed_issues}",
+        # Raw data for Grand Total calculations
+        '_completion_days_sum': sum(issue['completion_time_days'] for issue in completed_stories),
+        '_completed_stories_count': len(completed_stories),
+        '_sprints_sum': sum(issue['sprint_count'] for issue in completed_stories_for_sprints)
     }
 
 def generate_summary_report(team_ids, jira_conn_details, selected_summary_duration_name, teams_data, log_list, scope_hours):
@@ -156,7 +160,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         issues = get_summary_issues_by_jql(jql, jira_url, jira_username, jira_api_token, log_list)
         if not issues:
             append_log(log_list, "warn", f"No issues found for team {team_name}. Report will be empty.")
-            return team_id, _calculate_team_metrics(team_name, [])
+            return team_id, _calculate_team_metrics([])
         
         append_log(log_list, "info", f"Found {len(issues)} issues for team {team_name}.")
         append_log(log_list, "info", f"Scope change duration (grace period) = {scope_hours} hours.")
@@ -166,7 +170,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             all_metrics = []
         
         append_log(log_list, "info", f"Team {team_name} processed {len(all_metrics)} metrics from {len(issues)} issues")
-        return team_id, _calculate_team_metrics(team_name, all_metrics)
+        return team_id, _calculate_team_metrics(all_metrics)
 
     # Run all teams in parallel
     import streamlit as st
@@ -326,6 +330,9 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     total_bug_all_time_hours_sum = 0
     total_sprint_hours_sum = 0
     total_all_time_hours_sum = 0
+    grand_total_completion_days_sum = 0
+    grand_total_completed_stories_count = 0
+    grand_total_sprints_sum = 0
     
     for team_id, metrics in team_metrics.items():
         scope_changes = metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0/-0")
@@ -372,6 +379,11 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             all_time_hrs = float(hours_str.split(" / ")[1])
             total_sprint_hours_sum += sprint_hrs
             total_all_time_hours_sum += all_time_hrs
+            
+        # Collect raw completion data for weighted averages
+        grand_total_completion_days_sum += metrics.get('_completion_days_sum', 0)
+        grand_total_completed_stories_count += metrics.get('_completed_stories_count', 0)
+        grand_total_sprints_sum += metrics.get('_sprints_sum', 0)
     
     # Calculate grand total percentages and format combined columns
     grand_total_issues_percent = round((total_issues_completed_sum / total_row["Total Issues"]) * 100) if total_row["Total Issues"] > 0 else 0
@@ -380,10 +392,17 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     total_row["Issues Completed"] = f"{total_issues_completed_sum} ({grand_total_issues_percent}%)"
     total_row["Story Points Burnt"] = f"{round(total_story_points_burnt_sum)} ({grand_total_burnt_percent}%)"
     total_row["Logged Hrs (Sprint vs. All time)"] = f"{round(total_sprint_hours_sum)} / {round(total_all_time_hours_sum)}"
-    print(f"DEBUG: Grand Total - Spillover issues: {total_spillover_issues_sum}, points: {total_spillover_points_sum}")
+    # print(f"DEBUG: Grand Total - Spillover issues: {total_spillover_issues_sum}, points: {total_spillover_points_sum}")
     total_row["Spillover Issues & SPs"] = f"{int(total_spillover_issues_sum)} ({total_spillover_points_sum})"
     total_row["Bug Hrs (Sprint vs. All time)"] = f"{round(total_bug_sprint_hours_sum)} / {round(total_bug_all_time_hours_sum)}"
     total_row["Scope Changes (Issues)"] = f"+{total_added}/-{total_removed}"
+    
+    # Calculate weighted averages for Grand Total
+    grand_total_avg_completion_days = round(grand_total_completion_days_sum / grand_total_completed_stories_count) if grand_total_completed_stories_count > 0 else 0
+    grand_total_avg_sprints_story = round(grand_total_sprints_sum / grand_total_completed_stories_count, 1) if grand_total_completed_stories_count > 0 else 0
+    
+    total_row["Avg Completion Days"] = grand_total_avg_completion_days
+    total_row["Avg Sprints/Story"] = grand_total_avg_sprints_story
 
     # Add 'Teams' label
     total_row["Teams"] = "Grand Total"
