@@ -243,7 +243,7 @@ with st.sidebar:
 
     #### Detailed Report Side bar - START ####
     if st.session_state.user_authenticated:
-        st.markdown("---")
+        # st.markdown("---")
         with st.expander("Detailed Report"):
             with st.expander("Report Thresholds", expanded=False):
                 def on_threshold_change():
@@ -503,8 +503,8 @@ if st.session_state.user_authenticated:
                 else:
                     team_metrics = cached_summary_report(teams_tuple, jira_conn_details, st.session_state.selected_summary_duration_name, teams_data_tuple, button_timestamp, st.session_state.scope_time_range)
                 
-                # Generate comparison data if enabled
-                if st.session_state.show_comparison:
+                # Generate comparison data if enabled and not already available
+                if st.session_state.show_comparison and st.session_state.comparison_data is None:
                     # Use the same durations as the summary dropdown (includes previous sprints)
                     all_durations = list(summary_durations_with_sprints.keys())
                     try:
@@ -544,8 +544,8 @@ if st.session_state.user_authenticated:
                     styled_summary_df = (
                         df_jira_metrics.style
                         .apply(lambda row: [
-                            'font-weight: bold; background-color: rgba(173, 216, 230, 0.4); border-top: 3px solid rgba(173, 216, 230, 0.4);' if row.name == df_jira_metrics.index[-1]
-                            else 'background-color: rgba(128, 128, 128, 0.1)' if row.name % 2 == 0
+                            'font-weight: bold; background-color: rgba(40, 167, 69, 0.3); border-top: 3px solid rgba(40, 167, 69, 0.8);' if row.name == df_jira_metrics.index[-1]
+                            # else 'background-color: rgba(128, 128, 128, 0.1)' if row.name % 2 == 0
                             else '' for _ in row
                         ], axis=1)
                         .set_table_styles([
