@@ -15,9 +15,9 @@ DETAILED_COLUMNS = {
     'SUMMARY': 'Summary',
     'ASSIGNEE': 'Assignee',
     'STATUS': 'Status',
+    'FAILED_QA_COUNT': 'Failed QA Count',
     'STORY_POINTS': 'Story Points',
     'SPRINTS': 'Sprints',
-    'FAILED_QA_COUNT': 'Failed QA Count',
     'LOGGED_TIME': 'Logged Time',
     'CYCLE_TIME': 'Cycle Time',
     'LEAD_TIME': 'Lead Time'
@@ -375,9 +375,9 @@ def extract_issue_meta(key, issue_data, log_list):
         DETAILED_COLUMNS['SUMMARY']: fields['summary'],
         DETAILED_COLUMNS['ASSIGNEE']: fields['assignee']['displayName'] if fields['assignee'] else "Unassigned",
         DETAILED_COLUMNS['STATUS']: fields['status']['name'],
-        DETAILED_COLUMNS['STORY_POINTS']: story_points_value,
-        DETAILED_COLUMNS['SPRINTS']: sprint_str,
         DETAILED_COLUMNS['FAILED_QA_COUNT']: failed_qa_count,
+        DETAILED_COLUMNS['STORY_POINTS']: story_points_value,
+        DETAILED_COLUMNS['SPRINTS']: sprint_str,        
         DETAILED_COLUMNS['LOGGED_TIME']: seconds_to_hm(logged_time_in_seconds),
     }
 

@@ -130,9 +130,14 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 hours_combined = metrics.get(SUMMARY_COLUMNS['HOURS_COMBINED'], "0 / 0")
                 sprint_hours = int(float(hours_combined.split(" / ")[0])) if " / " in hours_combined else 0
                 
+                issues_completed_str = metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)")
+                completion_pct = "0%"
+                if " (" in issues_completed_str and "%" in issues_completed_str:
+                    completion_pct = issues_completed_str.split("(")[1].split(")")[0]
+                
                 comparison_df.append({
                     'Team': team_name,
-                    'Completion %': metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)").split("(")[1].split(")")[0] if " (" in metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)") else "0%",
+                    'Completion %': completion_pct,
                     'Story Points': int(round(metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0))),
                     'Sprint Hours': sprint_hours
                 })

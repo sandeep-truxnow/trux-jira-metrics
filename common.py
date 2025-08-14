@@ -19,12 +19,8 @@ WORKFLOW_STATUSES = [
 ]
 
 DETAILED_DURATIONS_DATA = OrderedDict([
-    ("Current Sprint", "1"),
-    ("Year to Date", "startOfYear()"),
-    ("Current Month", "startOfMonth()"),
-    ("Last Month", "startOfMonth(-1)"),
-    ("Last 2 Months", "startOfMonth(-2)"),
-    ("Custom Date Range", "customDateRange()")
+    ("Current Sprint", "openSprints()"),
+    ("Year to Date", "startOfYear()")
 ])
 
 if 'selected_custom_start_date' not in st.session_state: st.session_state.selected_custom_start_date = None
@@ -139,31 +135,20 @@ def prepare_detailed_jql_query(selected_team_id, selected_detailed_duration_name
 
     if selected_detailed_duration_name == "Current Sprint":
         jql_query = f"'Team[Team]' = \"{selected_team_id}\" AND sprint in openSprints() AND issuetype NOT IN (Sub-task) ORDER BY KEY"
+    elif selected_detailed_duration_name.startswith("Sprint "):
+        # Extract sprint name from "Sprint 2025.XX" format
+        sprint_name = selected_detailed_duration_name.replace("Sprint ", "")
+        # Get team name from team ID
+        from config import TEAMS_DATA
+        team_name = next((name for name, tid in TEAMS_DATA.items() if tid == selected_team_id), "Unknown")
+        jql_query = f"'Team[Team]' = \"{selected_team_id}\" AND sprint = \"{team_name} {sprint_name}\" AND issuetype NOT IN (Sub-task) ORDER BY KEY"
     else:
         # For all other durations, include status filter
         duration_func = DETAILED_DURATIONS_DATA.get(selected_detailed_duration_name, "")
-        
-        if duration_func == "customDateRange()":
-            # Custom date range handling using session state dates
-            start_date = st.session_state.selected_custom_start_date
-            end_date = st.session_state.selected_custom_end_date
-            
-            if start_date and end_date:
-                start_date_str = start_date.strftime("%Y-%m-%d")
-                end_date_str = end_date.strftime("%Y-%m-%d")
-                jql_query = (
-                    f"'Team[Team]' = \"{selected_team_id}\" AND issuetype NOT IN (Sub-task) "
-                    f"AND created >= '{start_date_str}' AND created <= '{end_date_str}' "
-                    f"AND status IN ({STATUS_INPUT}) ORDER BY KEY"
-                )
-            else:
-                append_log(log_list, "error", "Custom date range selected but start or end date is missing.")
-                st.stop()
-        else:
-            jql_query = (
-                f"'Team[Team]' = \"{selected_team_id}\" AND issuetype NOT IN (Sub-task) "
-                f"AND created > {duration_func} AND status IN ({STATUS_INPUT}) ORDER BY KEY"
-            )
+        jql_query = (
+            f"'Team[Team]' = \"{selected_team_id}\" AND issuetype NOT IN (Sub-task) "
+            f"AND created > {duration_func} AND status IN ({STATUS_INPUT}) ORDER BY KEY"
+        )
 
     if not jql_query:
         append_log(log_list, "error", "Failed to generate JQL query. Please check your selections.")

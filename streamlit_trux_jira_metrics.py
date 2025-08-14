@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import os
 
-from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date, DETAILED_DURATIONS_DATA
+from common import connection_setup, prepare_detailed_jql_query, get_previous_n_sprints, show_sprint_name_start_date_and_end_date, DETAILED_DURATIONS_DATA, get_sprint_for_date
 from report_detailed import generate_detailed_report, generated_report_df_display
 from report_summary import generate_summary_report, generated_summary_report_df_display
 from comparison_analysis import generate_team_comparison_data, display_comparison_analysis
@@ -14,19 +14,7 @@ from comparison_analysis import generate_team_comparison_data, display_compariso
 # === CACHE CONFIGURATION ===
 CACHE_TTL_SECONDS = 30  # Cache duration for all @st.cache_data calls
 
-
-TEAMS_DATA = OrderedDict([
-    ("A-Team", "34e068f6-978d-4ad9-a4ef-3bf5eec72f65"),
-    ("Avengers", "8d39d512-0220-4711-9ad0-f14fbf74a50e"),
-    ("Jarvis", "1ec8443e-a42c-4613-bc88-513ee29203d0"),
-    ("Mavrix", "1d8f251a-8fd9-4385-8f5f-6541c28bda19"),
-    ("Phoenix", "ac9cc58b-b860-4c4d-8a4e-5a64f50c5122"),
-    ("Quantum", "99b45e3f-49de-446c-b28d-25ef8e915ad6")
-])
-
-SUMMARY_DURATIONS_DATA = OrderedDict([
-    ("Current Sprint", "openSprints()")
-])
+from config import TEAMS_DATA, SUMMARY_DURATIONS_DATA
 
 # Theme-aware CSS for both light and dark modes
 st.markdown(
@@ -92,8 +80,6 @@ st.markdown("""
 
 st.title("📊 Jira Metrics")
 
-
-
 # --- Helper for capturing Streamlit messages ---
 def add_log_message(log_list, level, message):
     """Appends a timestamped log message to the log list and optionally displays immediate feedback."""
@@ -138,99 +124,106 @@ if 'show_comparison' not in st.session_state: st.session_state.show_comparison =
 if 'summary_logs_fullscreen' not in st.session_state: st.session_state.summary_logs_fullscreen = False
 if 'detailed_logs_fullscreen' not in st.session_state: st.session_state.detailed_logs_fullscreen = False
 if 'scope_change_data' not in st.session_state: st.session_state.scope_change_data = None
+if 'scope_time_range' not in st.session_state: st.session_state.scope_time_range = 48
+
+# Initialize button states
+if 'generate_summary' not in st.session_state: st.session_state.generate_summary = False
+if 'generate_detailed' not in st.session_state: st.session_state.generate_detailed = False
 
 # --- Main Streamlit App Layout ---
 # --- Sidebar for Jira Credentials and General Report Options ---
 with st.sidebar:
-    with st.expander("User Authentication", expanded=True):
-        user_email = st.text_input("User Email", help="Enter your email to get access.")
-        if st.button("Authenticate"):
-            try:
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                file_path = os.path.join(script_dir, "user_auth.txt")
+    # Always show authentication section first
+    if not st.session_state.user_authenticated:
+        with st.expander("User Authentication", expanded=True):
+            user_email = st.text_input("User Email", help="Enter your email to get access.", key="user_email_input")
+            if st.button("Authenticate", key="auth_btn"):
+                try:
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    file_path = os.path.join(script_dir, "user_auth.txt")
 
-                with open(file_path, "r", encoding="utf-8") as file:
-                    for line in file:
-                        user, auth = line.strip().split('|')
-                        if user_email.strip().lower() == user.strip().lower() and auth.strip().lower() == "grant":
-                            st.session_state.user_authenticated = True
-                            st.success("Authenticated successfully.")
-                            break
-                    else:
-                        st.session_state.user_authenticated = False
-                        st.error("Access denied.")
-            except FileNotFoundError:
-                st.error("Authentication file not found. Contact administrator.")
-
-
-if st.session_state.user_authenticated:
-    with st.sidebar:
-        st.markdown("---")
+                    with open(file_path, "r", encoding="utf-8") as file:
+                        for line in file:
+                            user, auth = line.strip().split('|')
+                            if user_email.strip().lower() == user.strip().lower() and auth.strip().lower() == "grant":
+                                st.session_state.user_authenticated = True
+                                st.success("Authenticated successfully.")
+                                st.rerun()
+                                break
+                        else:
+                            st.session_state.user_authenticated = False
+                            st.error("Access denied.")
+                except FileNotFoundError:
+                    st.error("Authentication file not found. Contact administrator.")
+    
+    if st.session_state.user_authenticated:
+        # st.markdown("---")
         # JIRA Connection Details (hardcoded)
         jira_url = "https://truxinc.atlassian.net"
         jira_email = "devops@truxnow.com"  # Replace with your JIRA email
         jira_api_token = "ATATT3xFfGF0jW8QvPl3S5MyCZPa1CJt9WmUbTPn0MOr_O5Eh1aePI6tXkdIxrcJKUKa7z7iHLawm3YvYU_zjrAoSPAQkXWZN5V1YekPnBwmjw6tqu_RtmrkDDtnyocECiCBAKN5T6waGfFgm1tRCYfig-xpuO9GvookawoD57V3TRLxQ0qXMvw=0BBD706D"  # Replace with your JIRA API token
-        
+    
+    #### Summary Report Side bar - START ####
+    if st.session_state.user_authenticated:
         with st.expander("Summary Report", expanded=True):
-        # st.header("Summary Report")
-            sprint_count = st.slider("Previous Sprints to Include", min_value=1, max_value=10, value=3, help="Number of previous sprints to show in duration dropdown")
-            previous_sprints = get_previous_n_sprints(sprint_count)
+            if 'summary_sprint_count' not in st.session_state:
+                st.session_state.summary_sprint_count = 3
+            summary_sprint_count = st.slider("Previous Sprints to Include", min_value=1, max_value=10, value=st.session_state.summary_sprint_count, help="Number of previous sprints to show in duration dropdown", key="summary_sprint_slider")
+            st.session_state.summary_sprint_count = summary_sprint_count
+            previous_sprints = get_previous_n_sprints(summary_sprint_count)
             
             # Get current sprint to avoid duplication
             from common import get_sprint_for_date
             from datetime import date
             current_sprint_name, _, _ = get_sprint_for_date(date.today().strftime("%Y-%m-%d"))
             
-            # Add only previous sprints (exclude current sprint)
+            # Create a copy and add only previous sprints (exclude current sprint)
+            summary_durations_with_sprints = SUMMARY_DURATIONS_DATA.copy()
             for sprint in previous_sprints:
                 if sprint != current_sprint_name:
-                    SUMMARY_DURATIONS_DATA[f"Sprint {sprint}"] = sprint
+                    summary_durations_with_sprints[f"Sprint {sprint}"] = sprint
 
-            summary_duration_names = list(SUMMARY_DURATIONS_DATA.keys())
+            summary_duration_names = list(summary_durations_with_sprints.keys())
             current_summary_duration_name_for_selector = st.session_state.selected_summary_duration_name
             current_summary_duration_idx = summary_duration_names.index(current_summary_duration_name_for_selector) if current_summary_duration_name_for_selector in summary_duration_names else 0
 
             def on_summary_duration_selector_change_callback():
-                st.session_state.selected_summary_duration_name = st.session_state.summary_duration_selector_widget_key
-                st.session_state.selected_summary_duration_func = SUMMARY_DURATIONS_DATA.get(st.session_state.selected_summary_duration_name)
+                st.session_state.selected_summary_duration_name = st.session_state.summary_duration_selector
+                st.session_state.selected_summary_duration_func = summary_durations_with_sprints.get(st.session_state.selected_summary_duration_name)
 
             st.selectbox(
                 "Select Duration",
                 options=summary_duration_names,
                 index=current_summary_duration_idx,
-                key="summary_duration_selector_widget_key",
+                key="summary_duration_selector",
                 on_change=on_summary_duration_selector_change_callback,
                 help="Select the time duration for filtering issues."
             )
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                if st.button("Generate Summary Report"):
-                    generate_summary_button = True
-                else:
-                    generate_summary_button = False
+                if st.button("Generate Summary Report", key="summary_generate_btn"):
+                    st.session_state.generate_summary = True
             with col2:
-                if st.button("🔄 Refresh", help="Force refresh data (bypass cache)"):
+                if st.button("🔄 Refresh", help="Force refresh data (bypass cache)", key="summary_refresh_btn"):
                     st.cache_data.clear()
                     st.session_state.summary_data = None
                     st.session_state.comparison_data = None
                     st.session_state.last_summary_selection = None
-                    generate_summary_button = True
+                    st.session_state.generate_summary = True
                     
                     # Generate comparison data if enabled
                     if st.session_state.show_comparison:
                         st.session_state.comparison_data = "loading"
-                else:
-                    pass
             
             # Add comparison toggle
             def on_comparison_toggle_change():
-                st.session_state.show_comparison = st.session_state.comparison_toggle_widget_key
+                st.session_state.show_comparison = st.session_state.comparison_toggle
             
             st.checkbox(
                 "Show Team Comparison Analysis", 
                 value=st.session_state.show_comparison,
-                key="comparison_toggle_widget_key",
+                key="comparison_toggle",
                 on_change=on_comparison_toggle_change,
                 help="Compare teams across different durations"
             )
@@ -241,22 +234,23 @@ if st.session_state.user_authenticated:
                 max_value=168,
                 value=48,
                 step=24,
-                key="scope_time_range",
+                key="scope_time_slider",
                 help="Show scope changes within this time range after sprint start"
             )
 
+    #### Summary Report Side bar - END ####
 
+
+    #### Detailed Report Side bar - START ####
+    if st.session_state.user_authenticated:
         st.markdown("---")
         with st.expander("Detailed Report"):
-        # st.markdown("Report Thresholds")
-        # st.markdown("<span style='color:red'>Report Thresholds</span>", unsafe_allow_html=True)
-
             with st.expander("Report Thresholds", expanded=False):
                 def on_threshold_change():
                     pass
                     
-                cycle_time_threshold_days = st.slider("Cycle Time Threshold (days)", min_value=1, max_value=30, value=7, step=1, key="cycle_threshold_days_input", on_change=on_threshold_change)
-                lead_time_threshold_days = st.slider("Lead Time Threshold (days)", min_value=1, max_value=60, value=21, step=1, key="lead_threshold_days_input", on_change=on_threshold_change)
+                cycle_time_threshold_days = st.slider("Cycle Time Threshold (days)", min_value=1, max_value=30, value=7, step=1, key="cycle_threshold_slider", on_change=on_threshold_change)
+                lead_time_threshold_days = st.slider("Lead Time Threshold (days)", min_value=1, max_value=60, value=21, step=1, key="lead_threshold_slider", on_change=on_threshold_change)
                 
             cycle_threshold_hours = cycle_time_threshold_days * 24
             lead_threshold_hours = lead_time_threshold_days * 24
@@ -267,35 +261,54 @@ if st.session_state.user_authenticated:
             
             # Callback to update session state (rerun will happen automatically from on_change)
             def on_team_selector_change_callback():
-                st.session_state.selected_team_name = st.session_state.team_selector_widget_key
+                st.session_state.selected_team_name = st.session_state.team_selector
                 st.session_state.selected_team_id = TEAMS_DATA.get(st.session_state.selected_team_name)
 
             st.selectbox(
                 "Select Team",
                 options=team_names_display,
                 index=current_team_idx,
-                key="team_selector_widget_key",
+                key="team_selector",
                 on_change=on_team_selector_change_callback,
                 help="Select the team to filter issues."
             )
 
-            def on_threshold_change():
-                pass
+            # Add previous sprints to detailed durations with separate slider
+            if 'detailed_sprint_count' not in st.session_state:
+                st.session_state.detailed_sprint_count = 3
+            detailed_sprint_count = st.slider("Previous Sprints for Detailed", min_value=1, max_value=10, value=st.session_state.detailed_sprint_count, help="Number of previous sprints for detailed report", key="detailed_sprint_slider")
+            st.session_state.detailed_sprint_count = detailed_sprint_count
+            previous_sprints_detailed = get_previous_n_sprints(detailed_sprint_count)
+            current_sprint_name_detailed, _, _ = get_sprint_for_date(date.today().strftime("%Y-%m-%d"))
+            
+            # Create a copy of DETAILED_DURATIONS_DATA and add previous sprints
+            detailed_durations_with_sprints = DETAILED_DURATIONS_DATA.copy()
+            
+            # Insert previous sprints after Current Sprint but before Year to Date
+            items = list(detailed_durations_with_sprints.items())
+            current_sprint_item = items[0]  # Current Sprint
+            year_to_date_item = items[1]   # Year to Date
+            
+            # Rebuild with sprints in between
+            detailed_durations_with_sprints = OrderedDict([current_sprint_item])
+            for sprint in previous_sprints_detailed:
+                if sprint != current_sprint_name_detailed:
+                    detailed_durations_with_sprints[f"Sprint {sprint}"] = sprint
+            detailed_durations_with_sprints[year_to_date_item[0]] = year_to_date_item[1]
 
-
-            detailed_duration_names = list(DETAILED_DURATIONS_DATA.keys())
+            detailed_duration_names = list(detailed_durations_with_sprints.keys())
             current_detailed_duration_name_for_selector = st.session_state.selected_detailed_duration_name
             current_detailed_duration_idx = detailed_duration_names.index(current_detailed_duration_name_for_selector) if current_detailed_duration_name_for_selector in detailed_duration_names else 0
 
             def on_detailed_duration_selector_change_callback():
-                st.session_state.selected_detailed_duration_name = st.session_state.detailed_duration_selector_widget_key
-                st.session_state.selected_detailed_duration_func = DETAILED_DURATIONS_DATA.get(st.session_state.selected_detailed_duration_name)
+                st.session_state.selected_detailed_duration_name = st.session_state.detailed_duration_selector
+                st.session_state.selected_detailed_duration_func = detailed_durations_with_sprints.get(st.session_state.selected_detailed_duration_name)
 
             st.selectbox(
                 "Select Duration",
                 options=detailed_duration_names,
                 index=current_detailed_duration_idx,
-                key="detailed_duration_selector_widget_key",
+                key="detailed_duration_selector",
                 on_change=on_detailed_duration_selector_change_callback,
                 help="Select the time duration for filtering issues."
             )
@@ -307,34 +320,40 @@ if st.session_state.user_authenticated:
                 def on_date_change():
                     pass
                 
-                st.session_state.selected_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_input", on_change=on_date_change)
-                st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_input", on_change=on_date_change)
+                st.session_state.selected_custom_start_date = st.date_input("Start Date", value=start_default, key="start_date_picker", on_change=on_date_change)
+                st.session_state.selected_custom_end_date = st.date_input("End Date", value=end_default, key="end_date_picker", on_change=on_date_change)
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                if st.button("Generate Detailed Report"):
-                    generate_detailed_button = True
-                else:
-                    generate_detailed_button = False
+                if st.button("Generate Detailed Report", key="detailed_generate_btn"):
+                    st.session_state.generate_detailed = True
             with col2:
-                if st.button("🔄 Refresh", help="Force refresh data (bypass cache)", key="detailed_refresh"):
+                if st.button("🔄 Refresh", help="Force refresh data (bypass cache)", key="detailed_refresh_btn"):
                     st.cache_data.clear()
                     st.session_state.detailed_data = None
                     st.session_state.detailed_header = None
                     st.session_state.last_detailed_selection = None
-                    generate_detailed_button = True
-                else:
-                    pass
+                    st.session_state.generate_detailed = True
 
+    #### Detailed Report Side bar - END ####
 
+# Define variables for authenticated users
+if st.session_state.user_authenticated:
+    # These variables are defined in the sidebar when authenticated
+    pass
+else:
+    # Default values when not authenticated
+    jira_url = None
+    jira_email = None
+    jira_api_token = None
+    cycle_threshold_hours = 168
+    lead_threshold_hours = 504
 
-
-
-    # # --- Main Content Area for Report Options ---
-    styled_summary_df = None
-
+# --- Main Content Area for Report Options ---
+if st.session_state.user_authenticated:
     tab_summary, tab_detailed = st.tabs(["Summary Report", "Detailed Report"])
 
+    #### Summary Tab - START    ####
     with tab_summary:
         if st.session_state.summary_header is not None:
             st.markdown(st.session_state.summary_header, unsafe_allow_html=True)
@@ -391,38 +410,37 @@ if st.session_state.user_authenticated:
                     )
         else:
             st.info("Click 'Generate Summary Report' to view the summary data.")
+
+
+    #### Detailed Tab - START    ####
+    with tab_detailed:
+        if st.session_state.detailed_header is not None:
+            st.markdown(st.session_state.detailed_header, unsafe_allow_html=True)
         
-        # Show comparison toggle even when no data
-        # if st.session_state.show_comparison:
-        #     st.info("Enable comparison analysis by generating a summary report first.")
-
-        with tab_detailed:
-            if st.session_state.detailed_header is not None:
-                st.markdown(st.session_state.detailed_header, unsafe_allow_html=True)
+        if st.session_state.detailed_data is not None:
+            common_message = "This report is filtered and excludes sub-tasks"
+            status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'Done', 'QA Complete', 'In UAT', 'Ready for Release', 'Released', 'Closed'"
             
-            if st.session_state.detailed_data is not None:
-                common_message = "This report is filtered and excludes sub-tasks"
-                status_message = "This report is filtered and excludes sub-tasks. Includes only issues with status 'Done', 'QA Complete', 'In UAT', 'Ready for Release', 'Released', 'Closed'"
-                
-                # Show info messages
-                if st.session_state.selected_detailed_duration_name == "Current Sprint":
-                    st.info(f"ℹ️ {common_message}.")
-                elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
-                    st.info(f"ℹ️ {status_message}.")
-                else:
-                    st.info(f"ℹ️ {status_message}.")
-                
-                st.info(f"ℹ️ **Report Thresholds:** Cycle Time > {cycle_time_threshold_days} days and Lead Time > {lead_time_threshold_days} days are highlighted as exceeding thresholds.")
-                
-                from report_detailed import generated_report_df_display
-                generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.detailed_log_messages)
+            # Show info messages
+            if st.session_state.selected_detailed_duration_name == "Current Sprint":
+                st.info(f"ℹ️ {common_message}.")
+            elif st.session_state.selected_detailed_duration_name == "Custom Date Range":
+                st.info(f"ℹ️ {status_message}.")
             else:
-                st.info("Click 'Generate Detailed Report' to view the detailed data.")
+                st.info(f"ℹ️ {status_message}.")
+            
+            st.info(f"ℹ️ **Report Thresholds:** Cycle Time > {cycle_time_threshold_days} days and Lead Time > {lead_time_threshold_days} days are highlighted as exceeding thresholds.")
+            
+            from report_detailed import generated_report_df_display
+            generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.detailed_log_messages)
+        else:
+            st.info("Click 'Generate Detailed Report' to view the detailed data.")
 
 
 
-
-    if generate_summary_button:
+    #### ------------- Report generation logic  ------------- ####
+    if st.session_state.generate_summary:
+        st.session_state.generate_summary = False
         current_selection = st.session_state.selected_summary_duration_name
         st.session_state.summary_log_messages = [] 
         start_time = datetime.now()
@@ -486,7 +504,8 @@ if st.session_state.user_authenticated:
                 
                 # Generate comparison data if enabled
                 if st.session_state.show_comparison:
-                    all_durations = list(SUMMARY_DURATIONS_DATA.keys())
+                    # Use the same durations as the summary dropdown (includes previous sprints)
+                    all_durations = list(summary_durations_with_sprints.keys())
                     try:
                         st.session_state.comparison_data = generate_team_comparison_data(
                             jira_conn_details, TEAMS_DATA, all_durations, st.session_state.summary_log_messages, st.session_state.scope_time_range
@@ -519,21 +538,6 @@ if st.session_state.user_authenticated:
                     df_jira_metrics = pd.concat([team_rows_sorted, grand_total_row], ignore_index=True)
 
                     df_jira_metrics.index = np.arange(1, len(df_jira_metrics) + 1)
-
-                    # Styling function
-                    def style_rows(row):
-                        is_last = row.name == df_jira_metrics.index[-1]
-                        is_even = row.name % 2 == 0
-
-                        styles = []
-                        for _ in row:
-                            if is_last:
-                                styles.append('font-weight: bold; background-color: #f4f4f4')
-                            elif is_even:
-                                styles.append('background-color: #f9f9f9')
-                            else:
-                                styles.append('')
-                        return styles
 
                     # Apply styles with theme-aware colors
                     styled_summary_df = (
@@ -571,8 +575,10 @@ if st.session_state.user_authenticated:
             add_log_message(st.session_state.summary_log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
 
 
-    ### Generate Detailed Report ###
-    if generate_detailed_button:
+
+    ### -------------   Generate Detailed Report -------------  ###
+    if st.session_state.generate_detailed:
+        st.session_state.generate_detailed = False
         add_log_message(st.session_state.detailed_log_messages, "info", "Generate detailed button clicked, switching to detailed tab")
         
         current_detailed_selection = (st.session_state.selected_team_id, st.session_state.selected_detailed_duration_name)
@@ -630,118 +636,5 @@ if st.session_state.user_authenticated:
         else:
             add_log_message(st.session_state.detailed_log_messages, "error", "Failed to set up Jira connection. Please check your credentials.")
 
-
-    # Check if any individual section is fullscreen
-    if st.session_state.summary_logs_fullscreen:
-        # Summary logs fullscreen - display in main area
-        st.markdown("**Summary Report Logs - Fullscreen**")
-        if st.button("⊞", key="summary_fullscreen_restore", help="Restore to normal view"):
-            st.session_state.summary_logs_fullscreen = False
-            st.rerun()
-        
-        if st.session_state.summary_log_messages:
-            for log_msg in st.session_state.summary_log_messages:
-                st.code(log_msg, language="text")
-        else:
-            st.info("No summary logs yet.")
-
-    elif st.session_state.detailed_logs_fullscreen:
-        # Detailed logs fullscreen - display in main area
-        st.markdown("**Detailed Report Logs - Fullscreen**")
-        if st.button("⊞", key="detailed_fullscreen_restore", help="Restore to normal view"):
-            st.session_state.detailed_logs_fullscreen = False
-            st.rerun()
-        
-        if st.session_state.detailed_log_messages:
-            for log_msg in st.session_state.detailed_log_messages:
-                st.code(log_msg, language="text")
-        else:
-            st.info("No detailed logs yet.")
-
-    else:
-        # Normal: show logs in expander with two column layout
-        with st.expander("View Processing Logs", expanded=False):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                summary_title = f"**Summary Report Logs - {st.session_state.selected_summary_duration_name}**"
-                st.markdown(summary_title)
-                
-                # Summary logs controls
-                col1a, col1b = st.columns([1, 1])
-                with col1a:
-                    if st.button("⛶", key="summary_logs_fullscreen_toggle", help="Expand to fullscreen"):
-                        st.session_state.summary_logs_fullscreen = True
-                        st.rerun()
-                with col1b:
-                    if st.session_state.summary_log_messages:
-                        log_content = "\n".join(st.session_state.summary_log_messages)
-                        st.download_button(
-                            "📥", 
-                            data=log_content,
-                            file_name=f"summary_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                            mime="text/plain",
-                            key="download_summary_logs",
-                            help="Download summary logs"
-                        )
-                
-                if st.session_state.summary_log_messages:
-                    for log_msg in st.session_state.summary_log_messages:
-                        st.code(log_msg, language="text")
-                else:
-                    st.info("No summary logs yet.")
-            
-            with col2:
-                detailed_title = f"**Detailed Report Logs - {st.session_state.selected_team_name} - {st.session_state.selected_detailed_duration_name}**"
-                st.markdown(detailed_title)
-                
-                # Detailed logs controls
-                col2a, col2b = st.columns([1, 1])
-                with col2a:
-                    if st.button("⛶", key="detailed_logs_fullscreen_toggle", help="Expand to fullscreen"):
-                        st.session_state.detailed_logs_fullscreen = True
-                        st.rerun()
-                with col2b:
-                    if st.session_state.detailed_log_messages:
-                        log_content = "\n".join(st.session_state.detailed_log_messages)
-                        st.download_button(
-                            "📥", 
-                            data=log_content,
-                            file_name=f"detailed_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                            mime="text/plain",
-                            key="download_detailed_logs",
-                            help="Download detailed logs"
-                        )
-                
-                if st.session_state.detailed_log_messages:
-                    for log_msg in st.session_state.detailed_log_messages:
-                        st.code(log_msg, language="text")
-                else:
-                    st.info("No detailed logs yet.")
-
-    # Simple tab switching at the end
-    if generate_summary_button or generate_detailed_button:
-        tab_to_switch = 0 if generate_summary_button else 1
-        st.markdown(
-            f"""
-            <script>
-            setTimeout(function() {{
-                const tabs = document.querySelectorAll('[data-baseweb="tab"]');
-                if (tabs.length > {tab_to_switch}) {{
-                    tabs[{tab_to_switch}].click();
-                }}
-            }}, 200);
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
-
 else:
     st.info("Please authenticate to access the dashboard.")
-
-# === PROCESSING LOGS SECTION (AT BOTTOM) ===
-
-
-
-
-
