@@ -2,5 +2,13 @@ sdash@truxnow.com|grant
 kmasden@truxnow.com|grant
 robes@truxnow.com|grant
 jdavoren@truxnow.com|grant
-shantanu@truxnow.com|deny
-sbandgar@truxnow.com|deny
+shantanu@truxnow.com|grant
+sbandgar@truxnow.com|grant
+ykorde@truxnow.com|grant
+rchavan@truxnow.com|grant
+sromala@truxnow.com|grant
+hshinde@truxnow.com|grant
+utayade@truxnow.com|grant
+nsatpute@truxnow.com|grant
+spillai@truxnow.com|grant
+mpailwan@truxnow.com|grant
