@@ -61,8 +61,13 @@ def create_team_performance_comparison(comparison_data, teams_data):
         for duration_name in ordered_durations:
             if duration_name in comparison_data:
                 team_metric = comparison_data[duration_name].get(team_id, {})
-                completion_pct = team_metric.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0)
-                row.append(f"{completion_pct:.0f}%")
+                # Extract percentage from Issues Completed format "X (Y%)"
+                issues_completed_str = team_metric.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)")
+                if " (" in issues_completed_str and "%" in issues_completed_str:
+                    completion_pct = int(issues_completed_str.split("(")[1].split("%")[0])
+                else:
+                    completion_pct = 0
+                row.append(f"{completion_pct}%")
         
         comparison_rows.append(row)
     
@@ -121,11 +126,15 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
             comparison_df = []
             for team_id, metrics in selected_metrics.items():
                 team_name = team_id_to_name[team_id]
+                # Extract sprint hours from combined format "X / Y"
+                hours_combined = metrics.get(SUMMARY_COLUMNS['HOURS_COMBINED'], "0 / 0")
+                sprint_hours = int(float(hours_combined.split(" / ")[0])) if " / " in hours_combined else 0
+                
                 comparison_df.append({
                     'Team': team_name,
-                    'Completion %': f"{metrics.get(SUMMARY_COLUMNS['PERCENT_COMPLETED'], 0):.0f}%",
+                    'Completion %': metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)").split("(")[1].split(")")[0] if " (" in metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)") else "0%",
                     'Story Points': int(round(metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0))),
-                    'Sprint Hours': int(round(metrics.get(SUMMARY_COLUMNS.get('SPRINT_HOURS', 'Sprint Hrs'), 0)))
+                    'Sprint Hours': sprint_hours
                 })
             
             df = pd.DataFrame(comparison_df).sort_values('Team')
@@ -150,11 +159,36 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Issues", "Story Points", "Bugs", "Sprint Hours", "Scope Changes"])
     
     with tab1:
-        issues_df = create_metric_comparison_table(
-            comparison_data, teams_data, 
-            SUMMARY_COLUMNS['TOTAL_ISSUES'], 'Issues'
-        )
-        if issues_df is not None:
+        # Create custom issues comparison with completed/total format
+        if comparison_data:
+            ordered_durations = []
+            if 'Current Sprint' in comparison_data:
+                ordered_durations.append('Current Sprint')
+            sprint_durations = [d for d in comparison_data.keys() if d.startswith('Sprint ')]
+            sprint_durations.sort(key=lambda x: tuple(map(int, x.replace('Sprint ', '').split('.'))), reverse=True)
+            ordered_durations.extend(sprint_durations)
+            
+            team_id_to_name = {v: k for k, v in teams_data.items()}
+            issues_rows = []
+            
+            for team_id in teams_data.values():
+                team_name = team_id_to_name[team_id]
+                row = [team_name]
+                
+                for duration_name in ordered_durations:
+                    if duration_name in comparison_data:
+                        team_metric = comparison_data[duration_name].get(team_id, {})
+                        total_issues = team_metric.get(SUMMARY_COLUMNS['TOTAL_ISSUES'], 0)
+                        issues_completed_str = team_metric.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)")
+                        completed_issues = int(issues_completed_str.split(" (")[0]) if " (" in issues_completed_str else 0
+                        completion_pct = int(issues_completed_str.split("(")[1].split("%")[0]) if " (" in issues_completed_str and "%" in issues_completed_str else 0
+                        row.append(f"{completed_issues}/{total_issues} ({completion_pct}%)")
+                
+                issues_rows.append(row)
+            
+            columns = ['Team'] + ordered_durations
+            issues_df = pd.DataFrame(issues_rows, columns=columns)
+            
             if selected_duration in issues_df.columns:
                 styled_df = issues_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
@@ -162,14 +196,29 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 st.dataframe(issues_df, hide_index=True, use_container_width=True)
     
     with tab2:
-        story_points_df = create_metric_comparison_table(
-            comparison_data, teams_data, 
-            SUMMARY_COLUMNS['STORY_POINTS'], 'Story Points'
-        )
-        if story_points_df is not None and len(story_points_df) > 0:
-            # Convert story points to integers
-            for col in story_points_df.columns[1:]:
-                story_points_df[col] = story_points_df[col].round(0).astype(int)
+        # Create custom story points comparison with burnt/total format
+        if comparison_data:
+            team_id_to_name = {v: k for k, v in teams_data.items()}
+            story_points_rows = []
+            
+            for team_id in teams_data.values():
+                team_name = team_id_to_name[team_id]
+                row = [team_name]
+                
+                for duration_name in ordered_durations:
+                    if duration_name in comparison_data:
+                        team_metric = comparison_data[duration_name].get(team_id, {})
+                        total_story_points = int(round(team_metric.get(SUMMARY_COLUMNS['STORY_POINTS'], 0)))
+                        story_points_burnt_str = team_metric.get(SUMMARY_COLUMNS['STORY_POINTS_BURNT'], "0 (0%)")
+                        burnt_points = int(float(story_points_burnt_str.split(" (")[0])) if " (" in story_points_burnt_str else 0
+                        burnt_pct = int(story_points_burnt_str.split("(")[1].split("%")[0]) if " (" in story_points_burnt_str and "%" in story_points_burnt_str else 0
+                        row.append(f"{burnt_points}/{total_story_points} ({burnt_pct}%)")
+                
+                story_points_rows.append(row)
+            
+            columns = ['Team'] + ordered_durations
+            story_points_df = pd.DataFrame(story_points_rows, columns=columns)
+            
             if selected_duration in story_points_df.columns:
                 styled_df = story_points_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
@@ -189,14 +238,27 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 st.dataframe(bugs_df, hide_index=True, use_container_width=True)
     
     with tab4:
-        sprint_hours_df = create_metric_comparison_table(
-            comparison_data, teams_data, 
-            SUMMARY_COLUMNS.get('SPRINT_HOURS', 'Sprint Hrs'), 'Sprint Hours'
-        )
-        if sprint_hours_df is not None and len(sprint_hours_df) > 0:
-            # Round sprint hours to whole numbers
-            for col in sprint_hours_df.columns[1:]:
-                sprint_hours_df[col] = sprint_hours_df[col].round(0).astype(int)
+        # Create custom sprint hours comparison extracting from combined format
+        if comparison_data:
+            team_id_to_name = {v: k for k, v in teams_data.items()}
+            sprint_hours_rows = []
+            
+            for team_id in teams_data.values():
+                team_name = team_id_to_name[team_id]
+                row = [team_name]
+                
+                for duration_name in ordered_durations:
+                    if duration_name in comparison_data:
+                        team_metric = comparison_data[duration_name].get(team_id, {})
+                        hours_combined = team_metric.get(SUMMARY_COLUMNS['HOURS_COMBINED'], "0 / 0")
+                        sprint_hours = int(float(hours_combined.split(" / ")[0])) if " / " in hours_combined else 0
+                        row.append(sprint_hours)
+                
+                sprint_hours_rows.append(row)
+            
+            columns = ['Team'] + ordered_durations
+            sprint_hours_df = pd.DataFrame(sprint_hours_rows, columns=columns)
+            
             if selected_duration in sprint_hours_df.columns:
                 styled_df = sprint_hours_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)

@@ -499,11 +499,14 @@ def seconds_to_hm(seconds_str):
 #     return hours
 
 def get_logged_time(histories):
+    total_logged_seconds = 0
     for history in histories:
         for item in history['items']:
             if item.get('field') == 'timespent':
-                return int(item['to'])
-    return 0
+                from_val = int(item.get('from') or 0)
+                to_val = int(item.get('to') or 0)
+                total_logged_seconds = max(total_logged_seconds, to_val)  # Use the latest total
+    return total_logged_seconds
 
 
 def parse_date(dt):

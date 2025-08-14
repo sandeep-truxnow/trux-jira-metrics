@@ -16,16 +16,13 @@ SUMMARY_COLUMNS = {
     'STORY_POINTS': 'Story Points',
     'ISSUES_COMPLETED': 'Issues Completed',
     'STORY_POINTS_BURNT': 'Story Points Burnt',
-    'SPRINT_HOURS': 'Sprint Hrs',
-    'ALL_TIME_HOURS': 'All Time Hrs',
-    'BUGS': 'Bugs',
+    'HOURS_COMBINED': 'Logged Hrs (Sprint vs. All time)',
     'FAILED_QA_COUNT': 'Failed QA Count',
-    'SPILLOVER_ISSUES': 'Spillover Issues',
-    'SPILLOVER_POINTS': 'Spillover Story Points',
+    'BUGS': 'Bugs',
+    'BUG_HOURS_COMBINED': 'Bug Hrs (Sprint vs. All time)',
     'AVG_COMPLETION_DAYS': 'Avg Completion Days',
     'AVG_SPRINTS_STORY': 'Avg Sprints/Story',
-    'BUGS_SPRINT_HOURS': 'Bugs Sprint Hrs',
-    'BUGS_ALL_TIME_HOURS': 'Bugs All Time Hrs',
+    'SPILLOVER_ISSUES_SPS': 'Spillover Issues & SPs',
     'SCOPE_CHANGES': 'Scope Changes (Issues)'
 }
 
@@ -75,7 +72,7 @@ def _get_sprint_datetime(jira_url, jira_username, jira_api_token, sprint_name, t
         sprint_start_datetime = datetime.combine(sprint_start_date, datetime.min.time()).replace(tzinfo=ZoneInfo('America/New_York'))
         return sprint_start_datetime, sprint_start_date, None
 
-def _calculate_team_metrics(all_metrics):
+def _calculate_team_metrics(team_name, all_metrics):
     total_issues = len(all_metrics)
     total_story_points = sum(issue['story_points'] for issue in all_metrics)
     total_story_points_burnt = sum(issue['story_points_burnt'] for issue in all_metrics)
@@ -86,6 +83,10 @@ def _calculate_team_metrics(all_metrics):
     total_bugs = sum(issue['bug_count'] for issue in all_metrics)
     total_spillover_issues = sum(issue['spillover_issues'] for issue in all_metrics)
     total_spillover_points = sum(issue['spillover_story_points'] for issue in all_metrics)
+    
+    # Debug spillover calculation
+    spillover_issues_list = [issue['spillover_issues'] for issue in all_metrics if issue['spillover_issues'] > 0]
+    spillover_points_list = [issue['spillover_story_points'] for issue in all_metrics if issue['spillover_story_points'] > 0]
     bugs_hours_in_current_sprint = sum(issue['bugs_hours_in_current_sprint'] for issue in all_metrics)
     total_all_time_bugs_hours = sum(issue['total_all_time_bugs_hours'] for issue in all_metrics)
     total_added_issues = sum(issue['added_to_sprint'] for issue in all_metrics)
@@ -94,13 +95,14 @@ def _calculate_team_metrics(all_metrics):
     completed_stories = [issue for issue in all_metrics if issue['issues_closed'] > 0 and issue['completion_time_days'] >= 0]
     # for issue in all_metrics:
     #     print(f"DEBUG: {team_name} - Issue: {issue['key']}, Completed: {issue['issues_closed'] > 0}, Completion Days: {issue['completion_time_days']}")
-    # print(f"DEBUG: {team_name} - Completed stories: {completed_stories}")
+    #     print(f"DEBUG: {team_name} - Completed stories: {completed_stories}")
+
     if completed_stories:
         completion_days_list = [issue['completion_time_days'] for issue in completed_stories]
-        # print(f"DEBUG: {team_name} - Completion days for completed stories: {completion_days_list}")
+        print(f"DEBUG: {team_name} - Completion days for completed stories: {completion_days_list}")
         total_days = sum(completion_days_list)
         avg_completion_days = total_days / len(completed_stories)
-        # print(f"DEBUG: Total days: {total_days}, Count: {len(completed_stories)}, Average: {avg_completion_days}")
+        print(f"DEBUG: Total days: {total_days}, Count: {len(completed_stories)}, Average: {avg_completion_days}")
     else:
         avg_completion_days = 0
     
@@ -113,25 +115,26 @@ def _calculate_team_metrics(all_metrics):
     issues_completed_percent = round((total_issues_closed / total_issues) * 100) if total_issues > 0 else 0
     story_points_burnt_percent = round((total_story_points_burnt / total_story_points) * 100) if total_story_points > 0 else 0
     
-    # Format with percentages
+    # Format with percentages and combined values
     issues_completed_display = f"{total_issues_closed} ({issues_completed_percent}%)"
-    story_points_burnt_display = f"{total_story_points_burnt} ({story_points_burnt_percent}%)"
+    story_points_burnt_display = f"{round(total_story_points_burnt)} ({story_points_burnt_percent}%)"
+    spillover_combined = f"{int(total_spillover_issues)} ({total_spillover_points})"
+    print(f"DEBUG: {team_name} - Formatted spillover: {spillover_combined}")
+    hours_combined = f"{round(seconds_to_hours(total_sprint_hours))} / {round(seconds_to_hours(total_all_time_hours))}"
+    bug_hours_combined = f"{round(seconds_to_hours(bugs_hours_in_current_sprint))} / {round(seconds_to_hours(total_all_time_bugs_hours))}"
     
     return {
         SUMMARY_COLUMNS['TOTAL_ISSUES']: total_issues,
         SUMMARY_COLUMNS['STORY_POINTS']: total_story_points,
         SUMMARY_COLUMNS['ISSUES_COMPLETED']: issues_completed_display,
         SUMMARY_COLUMNS['STORY_POINTS_BURNT']: story_points_burnt_display,
-        SUMMARY_COLUMNS['SPRINT_HOURS']: seconds_to_hours(total_sprint_hours),
-        SUMMARY_COLUMNS['ALL_TIME_HOURS']: seconds_to_hours(total_all_time_hours),
+        SUMMARY_COLUMNS['HOURS_COMBINED']: hours_combined,
+	    SUMMARY_COLUMNS['FAILED_QA_COUNT']: total_failed_qa_count,
         SUMMARY_COLUMNS['BUGS']: total_bugs,
-        SUMMARY_COLUMNS['FAILED_QA_COUNT']: total_failed_qa_count,
-        SUMMARY_COLUMNS['SPILLOVER_ISSUES']: total_spillover_issues,
-        SUMMARY_COLUMNS['SPILLOVER_POINTS']: total_spillover_points,
-        SUMMARY_COLUMNS['AVG_COMPLETION_DAYS']: round(avg_completion_days, 1),
-        SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story, 1),
-        SUMMARY_COLUMNS['BUGS_SPRINT_HOURS']: seconds_to_hours(bugs_hours_in_current_sprint),
-        SUMMARY_COLUMNS['BUGS_ALL_TIME_HOURS']: seconds_to_hours(total_all_time_bugs_hours),
+        SUMMARY_COLUMNS['BUG_HOURS_COMBINED']: bug_hours_combined,
+	    SUMMARY_COLUMNS['AVG_COMPLETION_DAYS']: round(avg_completion_days),
+        SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story),
+        SUMMARY_COLUMNS['SPILLOVER_ISSUES_SPS']: spillover_combined,        
         SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues}/-{total_removed_issues}"
     }
 
@@ -153,7 +156,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
         issues = get_summary_issues_by_jql(jql, jira_url, jira_username, jira_api_token, log_list)
         if not issues:
             append_log(log_list, "warn", f"No issues found for team {team_name}. Report will be empty.")
-            return team_id, _calculate_team_metrics([])
+            return team_id, _calculate_team_metrics(team_name, [])
         
         append_log(log_list, "info", f"Found {len(issues)} issues for team {team_name}.")
         append_log(log_list, "info", f"Scope change duration (grace period) = {scope_hours} hours.")
@@ -163,7 +166,7 @@ def generate_summary_report(team_ids, jira_conn_details, selected_summary_durati
             all_metrics = []
         
         append_log(log_list, "info", f"Team {team_name} processed {len(all_metrics)} metrics from {len(issues)} issues")
-        return team_id, _calculate_team_metrics(all_metrics)
+        return team_id, _calculate_team_metrics(team_name, all_metrics)
 
     # Run all teams in parallel
     import streamlit as st
@@ -293,16 +296,13 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             metrics.get(SUMMARY_COLUMNS['STORY_POINTS'], 0),
             metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)"),
             metrics.get(SUMMARY_COLUMNS['STORY_POINTS_BURNT'], "0 (0%)"),
-            metrics.get(SUMMARY_COLUMNS['SPRINT_HOURS'], 0.0),
-            metrics.get(SUMMARY_COLUMNS['ALL_TIME_HOURS'], 0.0),
-            metrics.get(SUMMARY_COLUMNS['BUGS'], 0),
+            metrics.get(SUMMARY_COLUMNS['HOURS_COMBINED'], "0.0 / 0.0"),
             metrics.get(SUMMARY_COLUMNS['FAILED_QA_COUNT'], 0),
-            metrics.get(SUMMARY_COLUMNS['SPILLOVER_ISSUES'], 0),
-            metrics.get(SUMMARY_COLUMNS['SPILLOVER_POINTS'], 0),
+            metrics.get(SUMMARY_COLUMNS['BUGS'], 0),
+            metrics.get(SUMMARY_COLUMNS['BUG_HOURS_COMBINED'], "0.0 (0.0)"),            
             metrics.get(SUMMARY_COLUMNS['AVG_COMPLETION_DAYS'], 0.0),
             metrics.get(SUMMARY_COLUMNS['AVG_SPRINTS_STORY'], 0.0),
-            metrics.get(SUMMARY_COLUMNS['BUGS_SPRINT_HOURS'], 0.0),
-            metrics.get(SUMMARY_COLUMNS['BUGS_ALL_TIME_HOURS'], 0.0),
+            metrics.get(SUMMARY_COLUMNS['SPILLOVER_ISSUES_SPS'], "0 (0)"),
             metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0/-0")
         ])
 
@@ -320,6 +320,12 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     total_removed = 0
     total_issues_completed_sum = 0
     total_story_points_burnt_sum = 0
+    total_spillover_issues_sum = 0
+    total_spillover_points_sum = 0
+    total_bug_sprint_hours_sum = 0
+    total_bug_all_time_hours_sum = 0
+    total_sprint_hours_sum = 0
+    total_all_time_hours_sum = 0
     
     for team_id, metrics in team_metrics.items():
         scope_changes = metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0/-0")
@@ -342,13 +348,41 @@ def generated_summary_report_df_display(team_metrics, teams_data):
         if " (" in story_points_burnt_str:
             burnt_points = float(story_points_burnt_str.split(" (")[0])
             total_story_points_burnt_sum += burnt_points
+            
+        # Parse spillover "X (Y)" format
+        spillover_str = metrics.get(SUMMARY_COLUMNS['SPILLOVER_ISSUES_SPS'], "0 (0)")
+        if " (" in spillover_str and ")" in spillover_str:
+            spillover_issues = int(spillover_str.split(" (")[0])
+            spillover_points = float(spillover_str.split("(")[1].split(")")[0])
+            total_spillover_issues_sum += spillover_issues
+            total_spillover_points_sum += spillover_points
+            
+        # Parse bug hours "X / Y" format
+        bug_hours_str = metrics.get(SUMMARY_COLUMNS['BUG_HOURS_COMBINED'], "0.0 / 0.0")
+        if " / " in bug_hours_str:
+            sprint_hours = float(bug_hours_str.split(" / ")[0])
+            all_time_hours = float(bug_hours_str.split(" / ")[1])
+            total_bug_sprint_hours_sum += sprint_hours
+            total_bug_all_time_hours_sum += all_time_hours
+            
+        # Parse hours combined "X / Y" format
+        hours_str = metrics.get(SUMMARY_COLUMNS['HOURS_COMBINED'], "0.0 / 0.0")
+        if " / " in hours_str:
+            sprint_hrs = float(hours_str.split(" / ")[0])
+            all_time_hrs = float(hours_str.split(" / ")[1])
+            total_sprint_hours_sum += sprint_hrs
+            total_all_time_hours_sum += all_time_hrs
     
-    # Calculate grand total percentages
+    # Calculate grand total percentages and format combined columns
     grand_total_issues_percent = round((total_issues_completed_sum / total_row["Total Issues"]) * 100) if total_row["Total Issues"] > 0 else 0
     grand_total_burnt_percent = round((total_story_points_burnt_sum / total_row["Story Points"]) * 100) if total_row["Story Points"] > 0 else 0
     
     total_row["Issues Completed"] = f"{total_issues_completed_sum} ({grand_total_issues_percent}%)"
-    total_row["Story Points Burnt"] = f"{total_story_points_burnt_sum} ({grand_total_burnt_percent}%)"
+    total_row["Story Points Burnt"] = f"{round(total_story_points_burnt_sum)} ({grand_total_burnt_percent}%)"
+    total_row["Logged Hrs (Sprint vs. All time)"] = f"{round(total_sprint_hours_sum)} / {round(total_all_time_hours_sum)}"
+    print(f"DEBUG: Grand Total - Spillover issues: {total_spillover_issues_sum}, points: {total_spillover_points_sum}")
+    total_row["Spillover Issues & SPs"] = f"{int(total_spillover_issues_sum)} ({total_spillover_points_sum})"
+    total_row["Bug Hrs (Sprint vs. All time)"] = f"{round(total_bug_sprint_hours_sum)} / {round(total_bug_all_time_hours_sum)}"
     total_row["Scope Changes (Issues)"] = f"+{total_added}/-{total_removed}"
 
     # Add 'Teams' label
@@ -482,6 +516,13 @@ def extract_issue_meta(issue, issue_data, selected_summary_duration_name, team_n
     failed_qa_count = count_transitions(histories, "In Testing", "Rejected") or 0
     worked_time_sprint = get_logged_time_per_sprint(histories, sprint_start_date, sprint_end_date)
     total_all_time = get_logged_time(histories)
+    
+    # Ensure sprint hours never exceed all-time hours (except for data anomalies)
+    # For spillover issues, all-time should typically be higher than sprint hours
+    if worked_time_sprint > total_all_time and total_all_time > 0:
+        # Log the anomaly but don't auto-correct for spillover issues as they may have legitimate reasons
+        if sprint_count <= 1:  # Only correct for non-spillover issues
+            worked_time_sprint = total_all_time
     
     added_to_sprint = 0
     removed_from_sprint = 0
