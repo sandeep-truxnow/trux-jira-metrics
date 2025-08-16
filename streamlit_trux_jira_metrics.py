@@ -394,7 +394,7 @@ if st.session_state.user_authenticated:
                     - **Spillover Story Points**: Story points from issues that span multiple sprints
                     - **Avg Completion Days**: Average number of days from issue creation to completion
                     - **Avg Sprints/Story**: Average number of sprints per story for completed issues
-                    - **Scope Changes**: Issues added (+) or removed (-) from sprint within selected time range after sprint start
+                    - **Scope Changes (Issues/SPs)**: Issues added (+) or removed (-) from sprint with story points in format: +<issues> / -<issues> (+<story points> / -<story points>) within selected time range after sprint start
                     
                     """)
             else:

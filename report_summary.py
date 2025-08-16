@@ -23,7 +23,7 @@ SUMMARY_COLUMNS = {
     'AVG_COMPLETION_DAYS': 'Avg Completion Days',
     'AVG_SPRINTS_STORY': 'Avg Sprints/Story',
     'SPILLOVER_ISSUES_SPS': 'Spillover Issues & SPs',
-    'SCOPE_CHANGES': 'Scope Changes (Issues)'
+    'SCOPE_CHANGES': 'Scope Changes (Issues/SPs)'
 }
 
 # === SCOPE CHANGE CONFIGURATION ===
@@ -91,6 +91,8 @@ def _calculate_team_metrics(all_metrics):
     total_all_time_bugs_hours = sum(issue['total_all_time_bugs_hours'] for issue in all_metrics)
     total_added_issues = sum(issue['added_to_sprint'] for issue in all_metrics)
     total_removed_issues = sum(issue['removed_from_sprint'] for issue in all_metrics)
+    total_added_story_points = sum(issue['story_points'] if issue['added_to_sprint'] else 0 for issue in all_metrics)
+    total_removed_story_points = sum(issue['story_points'] if issue['removed_from_sprint'] else 0 for issue in all_metrics)
     
     completed_stories = [issue for issue in all_metrics if issue['issues_closed'] > 0 and issue['completion_time_days'] >= 0]
     # for issue in all_metrics:
@@ -135,7 +137,7 @@ def _calculate_team_metrics(all_metrics):
 	    SUMMARY_COLUMNS['AVG_COMPLETION_DAYS']: round(avg_completion_days),
         SUMMARY_COLUMNS['AVG_SPRINTS_STORY']: round(avg_sprints_per_story, 1),
         SUMMARY_COLUMNS['SPILLOVER_ISSUES_SPS']: spillover_combined,        
-        SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues}/-{total_removed_issues}",
+        SUMMARY_COLUMNS['SCOPE_CHANGES']: f"+{total_added_issues} / -{total_removed_issues} (+{total_added_story_points} / -{total_removed_story_points})",
         # Raw data for Grand Total calculations
         '_completion_days_sum': sum(issue['completion_time_days'] for issue in completed_stories),
         '_completed_stories_count': len(completed_stories),
@@ -307,7 +309,7 @@ def generated_summary_report_df_display(team_metrics, teams_data):
             metrics.get(SUMMARY_COLUMNS['AVG_COMPLETION_DAYS'], 0.0),
             metrics.get(SUMMARY_COLUMNS['AVG_SPRINTS_STORY'], 0.0),
             metrics.get(SUMMARY_COLUMNS['SPILLOVER_ISSUES_SPS'], "0 (0)"),
-            metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0/-0")
+            metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0 / -0 (+0 / -0)")
         ])
 
     df = pd.DataFrame(rows, columns=generate_headers())
@@ -322,6 +324,8 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     # Calculate sums and averages for Grand Total
     total_added = 0
     total_removed = 0
+    total_added_sp = 0
+    total_removed_sp = 0
     total_issues_completed_sum = 0
     total_story_points_burnt_sum = 0
     total_spillover_issues_sum = 0
@@ -335,14 +339,28 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     grand_total_sprints_sum = 0
     
     for team_id, metrics in team_metrics.items():
-        scope_changes = metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0/-0")
-        # Parse the "+X/-Y" format
-        if "+" in scope_changes and "/-" in scope_changes:
-            parts = scope_changes.split("/-")
-            added = int(parts[0].replace("+", ""))
-            removed = int(parts[1])
-            total_added += added
-            total_removed += removed
+        scope_changes = metrics.get(SUMMARY_COLUMNS['SCOPE_CHANGES'], "+0 / -0 (+0 / -0)")
+        # Parse the "+X / -Y (+A / -B)" format
+        if "+" in scope_changes and " / -" in scope_changes and "(+" in scope_changes:
+            # Split by the opening parenthesis to separate issues and story points
+            issues_part = scope_changes.split(" (")[0]
+            sp_part = scope_changes.split("(")[1].replace(")", "")
+            
+            # Parse issues: "+X / -Y"
+            if " / -" in issues_part:
+                issues_parts = issues_part.split(" / -")
+                added = int(issues_parts[0].replace("+", ""))
+                removed = int(issues_parts[1])
+                total_added += added
+                total_removed += removed
+            
+            # Parse story points: "+A / -B"
+            if " / -" in sp_part:
+                sp_parts = sp_part.split(" / -")
+                added_sp = float(sp_parts[0].replace("+", ""))
+                removed_sp = float(sp_parts[1])
+                total_added_sp += added_sp
+                total_removed_sp += removed_sp
             
         # Parse issues completed "X (Y%)" format
         issues_completed_str = metrics.get(SUMMARY_COLUMNS['ISSUES_COMPLETED'], "0 (0%)")
@@ -395,7 +413,7 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     # print(f"DEBUG: Grand Total - Spillover issues: {total_spillover_issues_sum}, points: {total_spillover_points_sum}")
     total_row["Spillover Issues & SPs"] = f"{int(total_spillover_issues_sum)} ({total_spillover_points_sum})"
     total_row["Bug Hrs (Sprint vs. All time)"] = f"{round(total_bug_sprint_hours_sum)} / {round(total_bug_all_time_hours_sum)}"
-    total_row["Scope Changes (Issues)"] = f"+{total_added}/-{total_removed}"
+    total_row["Scope Changes (Issues/SPs)"] = f"+{total_added} / -{total_removed} (+{total_added_sp} / -{total_removed_sp})"
     
     # Calculate weighted averages for Grand Total
     grand_total_avg_completion_days = round(grand_total_completion_days_sum / grand_total_completed_stories_count) if grand_total_completed_stories_count > 0 else 0
