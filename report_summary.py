@@ -23,7 +23,7 @@ SUMMARY_COLUMNS = {
     'AVG_COMPLETION_DAYS': 'Avg Completion Days',
     'AVG_SPRINTS_STORY': 'Avg Sprints/Story',
     'SPILLOVER_ISSUES_SPS': 'Spillover Issues & SPs',
-    'SCOPE_CHANGES': 'Scope Changes (Issues/SPs)'
+    'SCOPE_CHANGES': 'Scope Changes (Issues & SPs)'
 }
 
 # === SCOPE CHANGE CONFIGURATION ===
@@ -413,7 +413,7 @@ def generated_summary_report_df_display(team_metrics, teams_data):
     # print(f"DEBUG: Grand Total - Spillover issues: {total_spillover_issues_sum}, points: {total_spillover_points_sum}")
     total_row["Spillover Issues & SPs"] = f"{int(total_spillover_issues_sum)} ({total_spillover_points_sum})"
     total_row["Bug Hrs (Sprint vs. All time)"] = f"{round(total_bug_sprint_hours_sum)} / {round(total_bug_all_time_hours_sum)}"
-    total_row["Scope Changes (Issues/SPs)"] = f"+{total_added} / -{total_removed} (+{total_added_sp} / -{total_removed_sp})"
+    total_row["Scope Changes (Issues & SPs)"] = f"+{total_added} / -{total_removed} (+{total_added_sp} / -{total_removed_sp})"
     
     # Calculate weighted averages for Grand Total
     grand_total_avg_completion_days = round(grand_total_completion_days_sum / grand_total_completed_stories_count) if grand_total_completed_stories_count > 0 else 0
