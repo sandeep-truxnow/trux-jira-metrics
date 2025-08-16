@@ -161,7 +161,7 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
     # Detailed metric comparisons
     st.markdown("**Detailed Metric Comparisons**")
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Issues", "Story Points", "Bugs", "Sprint Hours", "Scope Changes"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Issues", "Story Points", "Failed QA Count vs Bugs", "Sprint Hours", "Scope Changes"])
     
     with tab1:
         # Create custom issues comparison with completed/total format
@@ -231,16 +231,32 @@ def display_comparison_analysis(comparison_data, teams_data, selected_duration):
                 st.dataframe(story_points_df, hide_index=True, use_container_width=True)
     
     with tab3:
-        bugs_df = create_metric_comparison_table(
-            comparison_data, teams_data, 
-            SUMMARY_COLUMNS['BUGS'], 'Bugs'
-        )
-        if bugs_df is not None:
-            if selected_duration in bugs_df.columns:
-                styled_df = bugs_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
+        # Create combined Failed QA Count vs Bugs comparison
+        if comparison_data:
+            team_id_to_name = {v: k for k, v in teams_data.items()}
+            failed_qa_bugs_rows = []
+            
+            for team_id in teams_data.values():
+                team_name = team_id_to_name[team_id]
+                row = [team_name]
+                
+                for duration_name in ordered_durations:
+                    if duration_name in comparison_data:
+                        team_metric = comparison_data[duration_name].get(team_id, {})
+                        failed_qa_count = team_metric.get(SUMMARY_COLUMNS['FAILED_QA_COUNT'], 0)
+                        bugs_count = team_metric.get(SUMMARY_COLUMNS['BUGS'], 0)
+                        row.append(f"{failed_qa_count} / {bugs_count}")
+                
+                failed_qa_bugs_rows.append(row)
+            
+            columns = ['Team'] + ordered_durations
+            failed_qa_bugs_df = pd.DataFrame(failed_qa_bugs_rows, columns=columns)
+            
+            if selected_duration in failed_qa_bugs_df.columns:
+                styled_df = failed_qa_bugs_df.style.set_properties(subset=[selected_duration], **{'background-color': 'rgba(173, 216, 230, 0.4)'})
                 st.dataframe(styled_df, hide_index=True, use_container_width=True)
             else:
-                st.dataframe(bugs_df, hide_index=True, use_container_width=True)
+                st.dataframe(failed_qa_bugs_df, hide_index=True, use_container_width=True)
     
     with tab4:
         # Create custom sprint hours comparison extracting from combined format
