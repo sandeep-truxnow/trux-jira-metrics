@@ -160,8 +160,8 @@ with st.sidebar:
         # st.markdown("---")
         # JIRA Connection Details (hardcoded)
         jira_url = "https://truxinc.atlassian.net"
-        jira_email = "devops@truxnow.com"  # Replace with your JIRA email
-        jira_api_token = "ATATT3xFfGF0jW8QvPl3S5MyCZPa1CJt9WmUbTPn0MOr_O5Eh1aePI6tXkdIxrcJKUKa7z7iHLawm3YvYU_zjrAoSPAQkXWZN5V1YekPnBwmjw6tqu_RtmrkDDtnyocECiCBAKN5T6waGfFgm1tRCYfig-xpuO9GvookawoD57V3TRLxQ0qXMvw=0BBD706D"  # Replace with your JIRA API token
+        jira_email = "jira-user@truxnow.com"  # Replace with your JIRA email
+        jira_api_token = "NWG-ftz4wnc9wum8wkx"  # Replace with your JIRA API token
     
     #### Summary Report Side bar - START ####
     if st.session_state.user_authenticated:
@@ -487,6 +487,9 @@ if st.session_state.user_authenticated:
         jira_conn_details = connection_setup(jira_url, jira_email, jira_api_token, st.session_state.summary_log_messages)
 
         if jira_conn_details is not None:
+            print(f"Jira connection details: {jira_conn_details}")
+            add_log_message(st.session_state.summary_log_messages, "info", f"Jira connection details: {jira_conn_details}")
+            add_log_message(st.session_state.summary_log_messages, "info", "jira_conn_details successfully set up")
             with st.spinner("Fetching issues and generating summary report..."):
                 # Use caching for summary report with timestamp to ensure fresh calls on button click
                 @st.cache_data(ttl=CACHE_TTL_SECONDS)
