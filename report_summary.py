@@ -49,7 +49,12 @@ if 'generated_summary_report_df_display' not in st.session_state: st.session_sta
 
 def append_log(log_list, level, message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_list.append(f"[{timestamp}] [{level.upper()}] {message}")
+    log_entry = f"[{timestamp}] [{level.upper()}] {message}"
+    log_list.append(log_entry)
+    
+    # Print to console/terminal
+    print(log_entry)
+    
     if level == "error" or level == "critical":
         st.error(f"[{timestamp}] {message}")
     elif level == "warning":

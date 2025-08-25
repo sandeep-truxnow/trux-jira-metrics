@@ -84,7 +84,12 @@ st.title("📊 Jira Metrics")
 def add_log_message(log_list, level, message):
     """Appends a timestamped log message to the log list and optionally displays immediate feedback."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_list.append(f"[{timestamp}] [{level.upper()}] {message}")
+    log_entry = f"[{timestamp}] [{level.upper()}] {message}"
+    log_list.append(log_entry)
+    
+    # Print to console/terminal
+    print(log_entry)
+    
     if level == "error" or level == "critical":
         st.error(f"[{timestamp}] {message}")
     elif level == "warning":
@@ -162,6 +167,10 @@ with st.sidebar:
         jira_url = "https://truxinc.atlassian.net"
         jira_email = "jira-user@truxnow.com"  # Replace with your JIRA email
         jira_api_token = "NWG-ftz4wnc9wum8wkx"  # Replace with your JIRA API token
+
+        # jira_email = "sdash@truxnow.com"  # Replace with your JIRA email
+        # jira_api_token = "ATATT3xFfGF09Cr9miCKwTToYLxIBnc4km13jtT0z4O-FCgmgTyuswzGAcS0pmoXxQefEEdgiIP-R5xrhq36wGuVgQQSsH5UY_FB_B6QHPhslK8p8PC6heo16U_I1Bodd-BxTLWDFWN1W7GF1iznBSt7Ygy61gZa9IMMc94FzT5WYUAu-FaG-AE=48C04FDA"  # Replace with your JIRA API token
+    
     
     #### Summary Report Side bar - START ####
     if st.session_state.user_authenticated:
@@ -436,6 +445,35 @@ if st.session_state.user_authenticated:
             generated_report_df_display(st.session_state.detailed_data, cycle_threshold_hours, lead_threshold_hours, st.session_state.detailed_log_messages)
         else:
             st.info("Click 'Generate Detailed Report' to view the detailed data.")
+    
+    # Log viewing sections
+    if st.session_state.summary_log_messages:
+        with st.expander("📋 Summary Report Logs", expanded=False):
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                if st.download_button(
+                    "📥 Download Logs",
+                    "\n".join(st.session_state.summary_log_messages),
+                    file_name=f"summary_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain"
+                ):
+                    st.success("Summary logs downloaded!")
+            with col1:
+                st.text_area("Summary Logs", "\n".join(st.session_state.summary_log_messages), height=200, key="summary_logs_display")
+    
+    if st.session_state.detailed_log_messages:
+        with st.expander("📋 Detailed Report Logs", expanded=False):
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                if st.download_button(
+                    "📥 Download Logs",
+                    "\n".join(st.session_state.detailed_log_messages),
+                    file_name=f"detailed_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain"
+                ):
+                    st.success("Detailed logs downloaded!")
+            with col1:
+                st.text_area("Detailed Logs", "\n".join(st.session_state.detailed_log_messages), height=200, key="detailed_logs_display")
 
 
 
